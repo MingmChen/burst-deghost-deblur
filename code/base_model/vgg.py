@@ -23,23 +23,27 @@ model_urls = {
 
 class VGG(nn.Module):
 
-    def __init__(self, features, num_classes=1000, init_weights=True):
+    def __init__(self, features, num_classes=1000, init_weights=True, is_backbone=False):
         super(VGG, self).__init__()
         self.features = features
-        self.classifier = nn.Sequential(
-            nn.Linear(512 * 7 * 7, 4096),
-            nn.ReLU(True),
-            nn.Dropout(),
-            nn.Linear(4096, 4096),
-            nn.ReLU(True),
-            nn.Dropout(),
-            nn.Linear(4096, num_classes),
-        )
+        self.is_backbone = is_backbone
+        if not self.is_backbone:
+            self.classifier = nn.Sequential(
+                nn.Linear(512 * 7 * 7, 4096),
+                nn.ReLU(True),
+                nn.Dropout(),
+                nn.Linear(4096, 4096),
+                nn.ReLU(True),
+                nn.Dropout(),
+                nn.Linear(4096, num_classes),
+            )
         if init_weights:
             self._initialize_weights()
 
     def forward(self, x):
         x = self.features(x)
+        if self.is_backbone:
+            return x
         x = x.view(x.size(0), -1)
         x = self.classifier(x)
         return x
