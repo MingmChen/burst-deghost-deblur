@@ -84,15 +84,23 @@ def deconv2d_block(in_channels,
                    kernel_size,
                    stride=1,
                    padding=0,
+                   output_padding=0,
                    dilation=1,
                    groups=1,
                    init_type=None,
                    activation=None,
                    use_batchnorm=False):
-    # conv2d + bn + activation
+    # transpose conv2d + bn + activation
     block = []
-    block.append(nn.ConvTranspose2d(in_channels, out_channels,
-                                    kernel_size, stride, padding, dilation, groups))
+    block.append(nn.ConvTranspose2d(
+                    in_channels=in_channels,
+                    out_channels=out_channels,
+                    kernel_size=kernel_size,
+                    stride=stride,
+                    padding=padding,
+                    output_padding=output_padding,
+                    groups=groups
+                    ))
     weight_init_(block[-1].weight, init_type, activation)
     if use_batchnorm:
         block.append(nn.BatchNorm2d(out_channels))

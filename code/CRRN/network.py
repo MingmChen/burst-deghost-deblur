@@ -194,12 +194,49 @@ class ReductionModuleB(nn.Module):
         return output
 
 
-class InceptionModule(nn.Module):
-    def __init__(self):
-        super(InceptionModule, self).__init__()
+class InceptionDeconvModule(nn.Module):
+    def __init__(self, in_channels, out_channels, init_type="xavier", use_batchnorm=True):
+        super(InceptionDeconvModule, self).__init__()
+        self.init_type = init_type
+        self.bn = use_batchnorm
+        self.activation = nn.ReLU(inplace=True)
+        self.branch0 = M.deconv2d_block(
+                    in_channels=in_channels,
+                    out_channels=out_channels,
+                    kernel_size=4,
+                    stride=2,
+                    padding=1,
+                    init_type=self.init_type,
+                    activation=self.activation,
+                    use_batchnorm=self.bn
+                )
+        self.branch1 = M.deconv2d_block(
+                    in_channels=in_channels,
+                    out_channels=out_channels,
+                    kernel_size=4,
+                    stride=2,
+                    padding=1,
+                    init_type=self.init_type,
+                    activation=self.activation,
+                    use_batchnorm=self.bn
+                )
+        self.branch2 = M.deconv2d_block(
+                    in_channels=in_channels,
+                    out_channels=out_channels,
+                    kernel_size=4,
+                    stride=2,
+                    padding=1,
+                    init_type=self.init_type,
+                    activation=self.activation,
+                    use_batchnorm=self.bn
+                )
 
     def forward(self, x):
-        return x
+        x0 = self.branch0(x)
+        x1 = self.branch1(x)
+        x2 = self.branch2(x)
+        output = torch.cat([x0, x1, x2], dim=1)
+        return output
 
 
 class ImageInferenceNetwork(nn.Module):
@@ -256,7 +293,33 @@ class ImageInferenceNetwork(nn.Module):
             ))
 
         self.reduction_a = ReductionModuleA(in_channels=256, out_channels=256)
-        self.reduction_b = ReductionModuleB(in_channels=128, out_channels=128)
+        self.inception1 = InceptionDeconvModule(in_channels=3*256, out_channels=256)
+        self.inception2 = InceptionDeconvModule(in_channels=3*256+512, out_channels=128)
+        self.reduction_b = ReductionModuleB(in_channels=3*128+256, out_channels=128)
+        self.inception3 = InceptionDeconvModule(in_channels=3*128, out_channels=64)
+        self.inception4 = InceptionDeconvModule(in_channels=3*64+128, out_channels=32)
+        self.inception5 = InceptionDeconvModule(in_channels=3*32+64, out_channels=16)
+
+        self.conv_transition = M.conv2d_block(
+                    in_channels=3*16,
+                    out_channels=16,
+                    kernel_size=3,
+                    stride=1,
+                    padding=1,
+                    init_type=self.init_type,
+                    activation=self.activation,
+                    use_batchnorm=self.bn
+                )
+        self.conv_estimate_B = M.conv2d_block(
+                    in_channels=16,
+                    out_channels=3,
+                    kernel_size=3,
+                    stride=1,
+                    padding=1,
+                    init_type=self.init_type,
+                    activation=None,
+                    use_batchnorm=None
+                )
 
     def _add_conv_count(self):
         self.conv_count += 1
@@ -267,16 +330,33 @@ class ImageInferenceNetwork(nn.Module):
         return self.mp_count
 
     def forward(self, x):
+        origin_input = x
         skip_connect = []
         for k, layer in self.backbone.items():
             x = layer(x)
             if 'mp' in k and k != 'mp5':
                 skip_connect.append(x)
         x = self.feature_extract(x)
-        print('feature_extract', x.shape)
+
         x = self.reduction_a(x)
-        print('reduction_a', x.shape)
-        return x
+
+        x = self.inception1(x)
+        x = torch.cat([x, skip_connect[-1]], dim=1)
+        x = self.inception2(x)
+        x = torch.cat([x, skip_connect[-2]], dim=1)
+
+        x = self.reduction_b(x)
+
+        x = self.inception3(x)
+        x = torch.cat([x, skip_connect[-3]], dim=1)
+        x = self.inception4(x)
+        x = torch.cat([x, skip_connect[-4]], dim=1)
+        x = self.inception5(x)
+
+        x = self.conv_transition(x)
+        estimate_B = self.conv_estimate_B(x)
+        estimate_R = origin_input - estimate_B
+        return estimate_B, estimate_R
 
 
 if __name__ == "__main__":
@@ -286,5 +366,6 @@ if __name__ == "__main__":
     if torch.cuda.is_available():
         inputs = inputs.cuda()
         IiN = IiN.cuda()
-    output = IiN(inputs)
-    print(output.shape)
+    estimate_B, estimate_R = IiN(inputs)
+    print('estimate_B', estimate_B.shape)
+    print('estimate_R', estimate_R.shape)
