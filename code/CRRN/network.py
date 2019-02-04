@@ -3,13 +3,200 @@ from collections import OrderedDict
 import torch
 import torch.nn as nn
 sys.path.append('..')
-from base_model import vgg
 import base_model.nn_module as M
 
 
 class GradientInferenceNetwork(nn.Module):
     def __init__(self):
         super(GradientInferenceNetwork, self).__init__()
+
+    def forward(self, x):
+        return x
+
+
+class ReductionModuleA(nn.Module):
+    def __init__(self, in_channels, out_channels, init_type="xavier", use_batchnorm=True):
+        super(ReductionModuleA, self).__init__()
+        self.init_type = init_type
+        self.activation = nn.ReLU(inplace=True)
+        self.bn = use_batchnorm
+        self.branch0 = M.conv2d_block(
+                    in_channels=in_channels,
+                    out_channels=out_channels,
+                    kernel_size=3,
+                    stride=1,
+                    padding=1,
+                    init_type=self.init_type,
+                    activation=self.activation,
+                    use_batchnorm=self.bn
+                )
+        self.branch1 = nn.Sequential(
+                M.conv2d_block(
+                    in_channels=in_channels,
+                    out_channels=out_channels//2,
+                    kernel_size=1,
+                    stride=1,
+                    padding=0,
+                    init_type=self.init_type,
+                    activation=self.activation,
+                    use_batchnorm=self.bn
+                    ),
+                M.conv2d_block(
+                    in_channels=out_channels//2,
+                    out_channels=out_channels//2,
+                    kernel_size=3,
+                    stride=1,
+                    padding=1,
+                    init_type=self.init_type,
+                    activation=self.activation,
+                    use_batchnorm=self.bn
+                    ),
+                M.conv2d_block(
+                    in_channels=out_channels//2,
+                    out_channels=out_channels,
+                    kernel_size=1,
+                    stride=1,
+                    padding=0,
+                    init_type=self.init_type,
+                    activation=self.activation,
+                    use_batchnorm=self.bn
+                    )
+                )
+        self.branch2 = nn.Sequential(
+                M.conv2d_block(
+                    in_channels=in_channels,
+                    out_channels=out_channels//2,
+                    kernel_size=1,
+                    stride=1,
+                    padding=0,
+                    init_type=self.init_type,
+                    activation=self.activation,
+                    use_batchnorm=self.bn
+                    ),
+                M.conv2d_block(
+                    in_channels=out_channels//2,
+                    out_channels=out_channels,
+                    kernel_size=7,
+                    stride=1,
+                    padding=3,
+                    init_type=self.init_type,
+                    activation=self.activation,
+                    use_batchnorm=self.bn
+                    )
+                )
+
+    def forward(self, x):
+        x0 = self.branch0(x)
+        x1 = self.branch1(x)
+        x2 = self.branch2(x)
+        output = torch.cat([x0, x1, x2], dim=1)
+        return output
+
+
+class ReductionModuleB(nn.Module):
+    def __init__(self, in_channels, out_channels, init_type="xavier", use_batchnorm=True):
+        super(ReductionModuleB, self).__init__()
+        self.init_type = init_type
+        self.activation = nn.ReLU(inplace=True)
+        self.bn = use_batchnorm
+        self.branch0 = nn.Sequential(
+                M.conv2d_block(
+                    in_channels=in_channels,
+                    out_channels=out_channels//2,
+                    kernel_size=1,
+                    stride=1,
+                    padding=0,
+                    init_type=self.init_type,
+                    activation=self.activation,
+                    use_batchnorm=self.bn
+                    ),
+                M.conv2d_block(
+                    in_channels=out_channels//2,
+                    out_channels=out_channels,
+                    kernel_size=3,
+                    stride=1,
+                    padding=1,
+                    init_type=self.init_type,
+                    activation=self.activation,
+                    use_batchnorm=self.bn
+                    )
+                )
+        self.branch1 = nn.Sequential(
+                M.conv2d_block(
+                    in_channels=in_channels,
+                    out_channels=out_channels//2,
+                    kernel_size=1,
+                    stride=1,
+                    padding=0,
+                    init_type=self.init_type,
+                    activation=self.activation,
+                    use_batchnorm=self.bn
+                    ),
+                M.conv2d_block(
+                    in_channels=out_channels//2,
+                    out_channels=out_channels//2,
+                    kernel_size=(1, 7),
+                    stride=1,
+                    padding=(0, 3),
+                    init_type=self.init_type,
+                    activation=self.activation,
+                    use_batchnorm=self.bn
+                    ),
+                M.conv2d_block(
+                    in_channels=out_channels//2,
+                    out_channels=out_channels//2,
+                    kernel_size=(7, 1),
+                    stride=1,
+                    padding=(3, 0),
+                    init_type=self.init_type,
+                    activation=self.activation,
+                    use_batchnorm=self.bn
+                    ),
+                M.conv2d_block(
+                    in_channels=out_channels//2,
+                    out_channels=out_channels,
+                    kernel_size=1,
+                    stride=1,
+                    padding=0,
+                    init_type=self.init_type,
+                    activation=self.activation,
+                    use_batchnorm=self.bn
+                    )
+                )
+        self.branch2 = nn.Sequential(
+                M.conv2d_block(
+                    in_channels=in_channels,
+                    out_channels=out_channels//2,
+                    kernel_size=1,
+                    stride=1,
+                    padding=0,
+                    init_type=self.init_type,
+                    activation=self.activation,
+                    use_batchnorm=self.bn
+                    ),
+                M.conv2d_block(
+                    in_channels=out_channels//2,
+                    out_channels=out_channels,
+                    kernel_size=7,
+                    stride=1,
+                    padding=3,
+                    init_type=self.init_type,
+                    activation=self.activation,
+                    use_batchnorm=self.bn
+                    )
+                )
+
+    def forward(self, x):
+        x0 = self.branch0(x)
+        x1 = self.branch1(x)
+        x2 = self.branch2(x)
+        output = torch.cat([x0, x1, x2], dim=1)
+        return output
+
+
+class InceptionModule(nn.Module):
+    def __init__(self):
+        super(InceptionModule, self).__init__()
 
     def forward(self, x):
         return x
@@ -68,6 +255,9 @@ class ImageInferenceNetwork(nn.Module):
                 use_batchnorm=self.bn
             ))
 
+        self.reduction_a = ReductionModuleA(in_channels=256, out_channels=256)
+        self.reduction_b = ReductionModuleB(in_channels=128, out_channels=128)
+
     def _add_conv_count(self):
         self.conv_count += 1
         return self.conv_count
@@ -83,9 +273,9 @@ class ImageInferenceNetwork(nn.Module):
             if 'mp' in k and k != 'mp5':
                 skip_connect.append(x)
         x = self.feature_extract(x)
-        # print(len(skip_connect))
-        # for t in skip_connect:
-            # print(t.shape)
+        print('feature_extract', x.shape)
+        x = self.reduction_a(x)
+        print('reduction_a', x.shape)
         return x
 
 

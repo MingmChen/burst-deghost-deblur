@@ -48,7 +48,7 @@ def conv1d_block(in_channels,
     # conv1d + bn + activation
     block = []
     block.append(nn.Conv1d(in_channels, out_channels,
-                           kernel_size, stride, dilation, groups))
+                           kernel_size, stride, padding, dilation, groups))
     weight_init_(block[-1].weight, init_type, activation)
     if use_batchnorm:
         block.append(nn.BatchNorm1d(out_channels))
@@ -70,7 +70,7 @@ def conv2d_block(in_channels,
     # conv2d + bn + activation
     block = []
     block.append(nn.Conv2d(in_channels, out_channels,
-                           kernel_size, stride, dilation, groups))
+                           kernel_size, stride, padding, dilation, groups))
     weight_init_(block[-1].weight, init_type, activation)
     if use_batchnorm:
         block.append(nn.BatchNorm2d(out_channels))
@@ -92,7 +92,7 @@ def deconv2d_block(in_channels,
     # conv2d + bn + activation
     block = []
     block.append(nn.ConvTranspose2d(in_channels, out_channels,
-                                    kernel_size, stride, dilation, groups))
+                                    kernel_size, stride, padding, dilation, groups))
     weight_init_(block[-1].weight, init_type, activation)
     if use_batchnorm:
         block.append(nn.BatchNorm2d(out_channels))
