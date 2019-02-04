@@ -1,9 +1,10 @@
 import sys
 from collections import OrderedDict
+import torch
 import torch.nn as nn
 sys.path.append('..')
-import base_model.nn_module as M
 from base_model import vgg
+import base_model.nn_module as M
 
 
 class GradientInferenceNetwork(nn.Module):
@@ -41,7 +42,8 @@ class ImageInferenceNetwork(nn.Module):
             in_channels = 3
             for v in self.vgg_cfg['D']:
                 if v == 'M':
-                    self.backbone['mp{}'.format(self._add_mp_count())] = self.maxpool
+                    self.backbone['mp{}'.format(
+                        self._add_mp_count())] = self.maxpool
                 else:
                     self.backbone['conv{}'.format(self._add_conv_count())] = (
                         M.conv2d_block(
@@ -55,17 +57,16 @@ class ImageInferenceNetwork(nn.Module):
                         ))
                     in_channels = v
         # print(self.backbone)
-        self.head = OrderedDict()
-        self.head['conv{}'.format(self._add_conv_count())] = (
-                M.conv2d_block(
-                    in_channels=in_channels,
-                    out_channels=256,
-                    kernel_size=3,
-                    padding=1,
-                    init_type=self.init_type,
-                    activation=self.activation,
-                    use_batchnorm=self.bn
-                ))
+        self.feature_extract = (
+            M.conv2d_block(
+                in_channels=in_channels,
+                out_channels=256,
+                kernel_size=3,
+                padding=1,
+                init_type=self.init_type,
+                activation=self.activation,
+                use_batchnorm=self.bn
+            ))
 
     def _add_conv_count(self):
         self.conv_count += 1
@@ -79,12 +80,21 @@ class ImageInferenceNetwork(nn.Module):
         skip_connect = []
         for k, layer in self.backbone.items():
             x = layer(x)
-            if 'mp' in k:
+            if 'mp' in k and k != 'mp5':
                 skip_connect.append(x)
+        x = self.feature_extract(x)
+        # print(len(skip_connect))
+        # for t in skip_connect:
+            # print(t.shape)
         return x
 
 
 if __name__ == "__main__":
     GiN = GradientInferenceNetwork()
     IiN = ImageInferenceNetwork(backbone_type='vgg16_bn')
-    print(IiN)
+    inputs = torch.randn(4, 3, 224, 288)
+    if torch.cuda.is_available():
+        inputs = inputs.cuda()
+        IiN = IiN.cuda()
+    output = IiN(inputs)
+    print(output.shape)
