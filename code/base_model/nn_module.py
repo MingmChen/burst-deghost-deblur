@@ -6,7 +6,7 @@ def weight_init_(weight, init_type, activation=None):
     if init_type is None:
         return
 
-    def xavier_init(weight, **kwargs):
+    def xavier_init(weight, *args):
         xavier_normal_(weight)
 
     def kaiming_init(weight, activation):
@@ -31,7 +31,7 @@ def weight_init_(weight, init_type, activation=None):
 def sequential_pack(layers):
     assert isinstance(layers, list)
     seq = nn.Sequential(*layers)
-    seq.out_channels = layers[-1].out_channels
+    seq.out_channels = layers[0].out_channels
     return seq
 
 
