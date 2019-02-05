@@ -434,11 +434,11 @@ class ImageInferenceNetwork(nn.Module):
 
         self.reduction_a = ReductionModuleA(in_channels=256, out_channels=256)
         self.inception1 = InceptionDeconvModule(in_channels=3*256, out_channels=256)
-        self.inception2 = InceptionDeconvModule(in_channels=3*256+512, out_channels=128)
-        self.reduction_b = ReductionModuleB(in_channels=3*128+256, out_channels=128)
+        self.inception2 = InceptionDeconvModule(in_channels=3*256+512+256, out_channels=128)
+        self.reduction_b = ReductionModuleB(in_channels=3*128+256+128, out_channels=128)
         self.inception3 = InceptionDeconvModule(in_channels=3*128, out_channels=64)
-        self.inception4 = InceptionDeconvModule(in_channels=3*64+128, out_channels=32)
-        self.inception5 = InceptionDeconvModule(in_channels=3*32+64, out_channels=16)
+        self.inception4 = InceptionDeconvModule(in_channels=3*64+128+64, out_channels=32)
+        self.inception5 = InceptionDeconvModule(in_channels=3*32+64+32, out_channels=16)
 
         self.conv_transition = M.conv2d_block(
                     in_channels=3*16,
@@ -469,7 +469,7 @@ class ImageInferenceNetwork(nn.Module):
         self.mp_count += 1
         return self.mp_count
 
-    def forward(self, x):
+    def forward(self, x, gradient_guide):
         origin_input = x
         skip_connect = []
         for k, layer in self.backbone.items():
@@ -481,16 +481,16 @@ class ImageInferenceNetwork(nn.Module):
         x = self.reduction_a(x)
 
         x = self.inception1(x)
-        x = torch.cat([x, skip_connect[-1]], dim=1)
+        x = torch.cat([x, skip_connect[-1], gradient_guide[0]], dim=1)
         x = self.inception2(x)
-        x = torch.cat([x, skip_connect[-2]], dim=1)
+        x = torch.cat([x, skip_connect[-2], gradient_guide[1]], dim=1)
 
         x = self.reduction_b(x)
 
         x = self.inception3(x)
-        x = torch.cat([x, skip_connect[-3]], dim=1)
+        x = torch.cat([x, skip_connect[-3], gradient_guide[2]], dim=1)
         x = self.inception4(x)
-        x = torch.cat([x, skip_connect[-4]], dim=1)
+        x = torch.cat([x, skip_connect[-4], gradient_guide[3]], dim=1)
         x = self.inception5(x)
 
         x = self.conv_transition(x)
@@ -499,13 +499,15 @@ class ImageInferenceNetwork(nn.Module):
         return estimate_B, estimate_R
 
 
-def unit_test_IiN():
+def unit_test_IiN(gradient_guide):
     IiN = ImageInferenceNetwork(backbone_type='vgg16_bn')
     inputs = torch.randn(4, 3, 224, 288)
     if torch.cuda.is_available():
         inputs = inputs.cuda()
         IiN = IiN.cuda()
-    estimate_B, estimate_R = IiN(inputs)
+        for item in gradient_guide:
+            item = item.cuda()
+    estimate_B, estimate_R = IiN(inputs, gradient_guide)
     print('estimate_B', estimate_B.shape)
     print('estimate_R', estimate_R.shape)
 
@@ -521,8 +523,9 @@ def unit_test_GiN():
     print('number of gradient_guide', len(gradient_guide))
     for i in range(len(gradient_guide)):
         print('gradient_guide{}'.format(i+1), gradient_guide[i].shape)
+    return gradient_guide
 
 
 if __name__ == "__main__":
-    unit_test_GiN()
-    # unit_test_IiN()
+    gradient_guide = unit_test_GiN()
+    unit_test_IiN(gradient_guide)
