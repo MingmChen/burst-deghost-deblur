@@ -7,11 +7,151 @@ import base_model.nn_module as M
 
 
 class GradientInferenceNetwork(nn.Module):
-    def __init__(self):
+    encoder_list = [64, 128, 256, 512, 512]
+    decoder_list = [256, 128, 64, 32]
+
+    def __init__(self, init_type="xavier", use_batchnorm=True, use_maxpool=False, DEBUG=False):
         super(GradientInferenceNetwork, self).__init__()
+        self.init_type = init_type
+        self.bn = use_batchnorm
+        self.use_maxpool = use_maxpool
+        self.activation = nn.ReLU(inplace=True)
+
+        self.encoder = OrderedDict()
+        in_channels = 4
+        for i in range(len(self.encoder_list)):
+            self.encoder['conv{}'.format(i+1)] = M.conv2d_block(
+                        in_channels=in_channels,
+                        out_channels=self.encoder_list[i],
+                        kernel_size=3,
+                        stride=1,
+                        padding=1,
+                        init_type=self.init_type,
+                        activation=self.activation,
+                        use_batchnorm=self.bn
+                    )
+            in_channels = self.encoder_list[i]
+            if use_maxpool:
+                self.encoder['conv_next{}'.format(i+1)] = M.conv2d_block(
+                            in_channels=in_channels,
+                            out_channels=self.encoder_list[i],
+                            kernel_size=3,
+                            stride=1,
+                            padding=1,
+                            init_type=self.init_type,
+                            activation=self.activation,
+                            use_batchnorm=self.bn
+                        )
+                self.encoder['downsample{}'.format(i+1)] = nn.MaxPool2d(kernel_size=2)
+            else:
+                self.encoder['conv_downsample{}'.format(i+1)] = M.conv2d_block(
+                            in_channels=in_channels,
+                            out_channels=self.encoder_list[i],
+                            kernel_size=4,
+                            stride=2,
+                            padding=1,
+                            init_type=self.init_type,
+                            activation=self.activation,
+                            use_batchnorm=self.bn
+                        )
+
+        self.mid = nn.Sequential(
+                M.conv2d_block(
+                    in_channels=in_channels,
+                    out_channels=1024,
+                    kernel_size=7,
+                    stride=1,
+                    padding=3,
+                    init_type=self.init_type,
+                    activation=self.activation,
+                    use_batchnorm=self.bn
+                    ),
+                M.conv2d_block(
+                    in_channels=1024,
+                    out_channels=512,
+                    kernel_size=1,
+                    stride=1,
+                    padding=0,
+                    init_type=self.init_type,
+                    activation=self.activation,
+                    use_batchnorm=self.bn
+                    )
+                )
+
+        in_channels = 512
+        self.decoder = OrderedDict()
+        for i in range(len(self.decoder_list)):
+            self.decoder['conv{}'.format(i+1)] = M.conv2d_block(
+                        in_channels=in_channels,
+                        out_channels=self.decoder_list[i],
+                        kernel_size=3,
+                        stride=1,
+                        padding=1,
+                        init_type=self.init_type,
+                        activation=self.activation,
+                        use_batchnorm=self.bn
+                    )
+            in_channels = self.decoder_list[i]
+            self.decoder['deconv{}'.format(i+1)] = M.deconv2d_block(
+                        in_channels=in_channels,
+                        out_channels=self.decoder_list[i],
+                        kernel_size=4,
+                        stride=2,
+                        padding=1,
+                        init_type=self.init_type,
+                        activation=self.activation,
+                        use_batchnorm=self.bn
+                    )
+            in_channels += self.encoder_list[3-i]  # concat
+
+        self.end = nn.Sequential(
+                M.conv2d_block(
+                    in_channels=in_channels,
+                    out_channels=64,
+                    kernel_size=4,
+                    stride=1,
+                    padding=(1, 2),
+                    init_type=self.init_type,
+                    activation=self.activation,
+                    use_batchnorm=self.bn
+                    ),
+                M.conv2d_block(
+                    in_channels=64,
+                    out_channels=1,
+                    kernel_size=5,
+                    stride=2,
+                    padding=2,
+                    init_type=self.init_type,
+                    activation=None,
+                    use_batchnorm=None
+                    )
+                )
+        if DEBUG:
+            print(self.encoder)
+            print(self.mid)
+            print(self.decoder)
+            print(self.end)
 
     def forward(self, x):
-        return x
+        skip_connect = []
+        for k, layer in self.encoder.items():
+            x = layer(x)
+            if 'downsample' in k and 'downsample5' not in k:
+                skip_connect.append(x)
+
+        x = self.mid(x)
+
+        gradient_guide = []
+        count = 1
+        for k, layer in self.decoder.items():
+            x = layer(x)
+            if 'deconv' in k:
+                gradient_guide.append(x)
+                x = torch.cat([x, skip_connect[-count]], dim=1)
+                count += 1
+
+        estimate_gradient_B = self.end(x)
+        return estimate_gradient_B, gradient_guide
 
 
 class ReductionModuleA(nn.Module):
@@ -359,8 +499,7 @@ class ImageInferenceNetwork(nn.Module):
         return estimate_B, estimate_R
 
 
-if __name__ == "__main__":
-    GiN = GradientInferenceNetwork()
+def unit_test_IiN():
     IiN = ImageInferenceNetwork(backbone_type='vgg16_bn')
     inputs = torch.randn(4, 3, 224, 288)
     if torch.cuda.is_available():
@@ -369,3 +508,21 @@ if __name__ == "__main__":
     estimate_B, estimate_R = IiN(inputs)
     print('estimate_B', estimate_B.shape)
     print('estimate_R', estimate_R.shape)
+
+
+def unit_test_GiN():
+    GiN = GradientInferenceNetwork()
+    inputs = torch.randn(4, 4, 224, 288)
+    if torch.cuda.is_available():
+        inputs = inputs.cuda()
+        GiN = GiN.cuda()
+    estimate_gradient_B, gradient_guide = GiN(inputs)
+    print('estimate_gradient_B', estimate_gradient_B.shape)
+    print('number of gradient_guide', len(gradient_guide))
+    for i in range(len(gradient_guide)):
+        print('gradient_guide{}'.format(i+1), gradient_guide[i].shape)
+
+
+if __name__ == "__main__":
+    unit_test_GiN()
+    # unit_test_IiN()
