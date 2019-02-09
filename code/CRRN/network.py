@@ -132,6 +132,12 @@ class GradientInferenceNetwork(nn.Module):
             print(self.decoder)
             print(self.end)
 
+    def to_cuda(self):
+        for k, layer in self.encoder.items():
+            layer = layer.cuda()
+        for k, layer in self.decoder.items():
+            layer = layer.cuda()
+
     def forward(self, x):
         skip_connect = []
         for k, layer in self.encoder.items():
@@ -469,6 +475,10 @@ class ImageInferenceNetwork(nn.Module):
         self.mp_count += 1
         return self.mp_count
 
+    def to_cuda(self):
+        for k, layer in self.backbone.items():
+            layer = layer.cuda()
+
     def forward(self, x, gradient_guide):
         origin_input = x
         skip_connect = []
@@ -505,6 +515,7 @@ def unit_test_IiN(gradient_guide):
     if torch.cuda.is_available():
         inputs = inputs.cuda()
         IiN = IiN.cuda()
+        IiN.to_cuda()
         for item in gradient_guide:
             item = item.cuda()
     estimate_B, estimate_R = IiN(inputs, gradient_guide)
@@ -518,6 +529,7 @@ def unit_test_GiN():
     if torch.cuda.is_available():
         inputs = inputs.cuda()
         GiN = GiN.cuda()
+        GiN.to_cuda()
     estimate_gradient_B, gradient_guide = GiN(inputs)
     print('estimate_gradient_B', estimate_gradient_B.shape)
     print('number of gradient_guide', len(gradient_guide))
