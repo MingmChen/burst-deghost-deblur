@@ -49,7 +49,7 @@ class SILoss(nn.Module):
         self.sigma = sigma
         self.k3 = k3
 
-    def _get_kernel(self, img):
+    def get_kernel(self, img):
         assert(len(img.shape) == 4)
         b, c, h, w = img.shape
         real_size = min(h, w, self.kernel_size)
@@ -60,7 +60,7 @@ class SILoss(nn.Module):
         return kernel, real_size
 
     def __call__(self, img1, img2):
-        kernel, real_kernel_size = self._get_kernel(img1)
+        kernel, real_kernel_size = self.get_kernel(img1)
         if torch.cuda.is_available() and isinstance(img1, torch.cudaTensor):
             kernel = kernel.cuda()
         padding = real_kernel_size // 2
@@ -79,6 +79,48 @@ class SILoss(nn.Module):
         else:
             # TODO(test validation)
             return -si_metric.sum()
+
+
+class SSIMLoss(SILoss):
+    def __init__(self,
+                 channel,
+                 size_average=True,
+                 kernel_size=11,
+                 sigma=1.5,
+                 max_val=255,
+                 k1=0.01,
+                 k2=0.03,
+                 k3=0.03/2):
+        super(SSIMLoss, self).__init__(channel, size_average, kernel_size, sigma, max_val, k3)
+        self.k1 = k1
+        self.k2 = k2
+
+    def __call__(self, img1, img2):
+        kernel, real_kernel_size = self.get_kernel(img1)
+        if torch.cuda.is_available() and isinstance(img1, torch.cudaTensor):
+            kernel = kernel.cuda()
+        padding = real_kernel_size // 2
+        groups = self.channel
+
+        mu1 = F.conv2d(img1, kernel, padding=padding, groups=groups)
+        mu2 = F.conv2d(img2, kernel, padding=padding, groups=groups)
+        mu_11 = mu1 * mu1
+        mu_12 = mu1 * mu2
+        mu_22 = mu2 * mu2
+
+        sigma_11 = F.conv2d(img1*img1, kernel, padding=padding, groups=groups)
+        sigma_12 = F.conv2d(img1*img2, kernel, padding=padding, groups=groups)
+        sigma_22 = F.conv2d(img2*img2, kernel, padding=padding, groups=groups)
+
+        c1 = (self.k1 * self.max_val)**2
+        c2 = (self.k2 * self.max_val)**2
+        ssim_metric = (((2.0*mu_12 + c1) * (2.0*sigma_12 + c2)) /
+                       ((mu_11 + mu_22 + c1) * (sigma_11 + sigma_22 + c2)))
+        if self.size_average:
+            return 1 - ssim_metric.mean()
+        else:
+            # TODO(test validation)
+            return -ssim_metric.sum()
 
 
 def ssim_loss(estimate, gt, kernel_size=1):
@@ -108,8 +150,8 @@ def unit_test_gausskernel():
 
 
 def unit_test_SILoss():
-    #label = torch.randn(4, 3, 224, 224)
-    label = torch.from_numpy(np.load('loss_test.npy')).float()
+    # label = torch.randn(4, 3, 224, 224)
+    label = torch.from_numpy(np.load('test/loss_test.npy')).float()
     pred = label.clone()
     pred[:, 0, 0, :] = 1.0
     if torch.cuda.is_available():
@@ -118,9 +160,23 @@ def unit_test_SILoss():
 
     criterion = SILoss(channel=3, max_val=1.0)
     loss = criterion(pred, label)
-    print(loss.item())
+    print('SI loss value:', loss.item())
+
+
+def unit_test_SSIMLoss():
+    label = torch.from_numpy(np.load('test/loss_test.npy')).float()
+    pred = label.clone()
+    pred[:, 0, 0, :] = 1.0
+    if torch.cuda.is_available():
+        label = label.cuda()
+        pred = pred.cuda()
+
+    criterion = SSIMLoss(channel=3, max_val=1.0)
+    loss = criterion(pred, label)
+    print('SSIM loss value', loss.item())
 
 
 if __name__ == "__main__":
     # unit_test_gausskernel()
     unit_test_SILoss()
+    unit_test_SSIMLoss()
