@@ -61,7 +61,7 @@ class SILoss(nn.Module):
 
     def __call__(self, img1, img2):
         kernel, real_kernel_size = self.get_kernel(img1)
-        if torch.cuda.is_available() and isinstance(img1, torch.cudaTensor):
+        if torch.cuda.is_available() and img1.type() == 'torch.cuda.FloatTensor':
             kernel = kernel.cuda()
         padding = real_kernel_size // 2
         groups = self.channel
@@ -97,7 +97,7 @@ class SSIMLoss(SILoss):
 
     def __call__(self, img1, img2):
         kernel, real_kernel_size = self.get_kernel(img1)
-        if torch.cuda.is_available() and isinstance(img1, torch.cudaTensor):
+        if torch.cuda.is_available() and img1.type() == 'torch.cuda.FloatTensor':
             kernel = kernel.cuda()
         padding = real_kernel_size // 2
         groups = self.channel
