@@ -1,5 +1,6 @@
 import cv2
 import numpy as np
+import torchvision
 dir_data='../../../CRRN/data/'
 
 def gradient(image):
@@ -30,13 +31,11 @@ def unit_inputs(x,batch_size):
         image_mix_gra=cv2.cvtColor(gradient(image_mix),cv2.COLOR_RGB2GRAY)
         image_mix=cv2.resize(image_mix,dsize=(data_w,data_h),fx=1,fy=1)
         image_mix_gra=cv2.resize(image_mix_gra,dsize=(data_w,data_h),fx=1,fy=1)
-        cv2.imshow('a',image_mix_gra)
-        cv2.waitKey(0)
         for ii in range(0,data_h):
             for j in range(0,data_w):
                 for k in range(0,3):
-                    ret[i][k][ii][j]=image_mix[ii][j][k]
-                ret[i][3][ii][j]=image_mix_gra[ii][j]
+                    ret[i][k][ii][j]=image_mix[ii][j][k]/255
+                ret[i][3][ii][j]=image_mix_gra[ii][j]/255
     return ret
 
 unit_inputs(0,4)
