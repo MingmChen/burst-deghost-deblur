@@ -4,7 +4,7 @@ import random
 import numpy as np
 import sys
 sys.path.append(
-    'C:/Users/dell/Desktop/study_3/CCTV/CRRN/coco/windows/cocoapi-master/PythonAPI')
+    'E:\CCTV\CRRN\coco\PythonAPI')
 
 
 def main():
@@ -68,7 +68,7 @@ def main():
         out1, out2 = combine(image1, image2)
 
         cv2.imwrite('E:/CCTV/CRRN/data/input{}.jpg'.format(i), out1)
-        cv2.imwrite('E:/CCTV/CRRN/data/turth{}.jpg'.format(i), out1)
+        cv2.imwrite('E:/CCTV/CRRN/data/truth{}.jpg'.format(i), out1)
 
 
 if __name__ == "__main__":
