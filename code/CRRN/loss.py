@@ -123,18 +123,14 @@ class SSIMLoss(SILoss):
             return -ssim_metric.sum()
 
 
-def ssim_loss(estimate, gt, kernel_size=1):
-    ssim_val = 0
-    return 1 - ssim_val
-
-
-def total_loss(estimate_B, gt_B, estimate_R, gt_R, estimate_g_B, gt_g_B):
+def CRRN_loss(estimate_B, gt_B, estimate_R, gt_R, estimate_g_B, gt_g_B):
     B_FACTOR = 0.8
     l1_criterion = nn.L1Loss()
     si_criterion = SILoss(channel=1, max_val=1.0)
-    ret = (B_FACTOR * ssim_loss(estimate_B, gt_B) +
+    ssim_criterion = SSIMLoss(channel=3, max_val=1.0)
+    ret = (B_FACTOR * ssim_criterion(estimate_B, gt_B) +
            l1_criterion(estimate_B, gt_B) +
-           ssim_loss(estimate_R, gt_R) +
+           ssim_criterion(estimate_R, gt_R) +
            si_criterion(estimate_g_B, gt_g_B))
     return ret
 
