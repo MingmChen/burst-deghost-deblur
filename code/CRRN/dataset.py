@@ -1,68 +1,89 @@
 import cv2
 import os.path
-import torch.utils.data
+import torch
+from torch.utils.data import Dataset
+from torchvision import transforms
 import numpy as np
-import random
-import math
-
-dir_data = '../../../CRRN/data/'
+from PIL import Image
 
 
-class data(torch.utils.data.Dataset):
+class CrrnDatasetRgb(Dataset):
+
+    def __init__(self, root, train=True, transform=None):
+        self.root = root
+        self.train_path = os.path.join(root, 'train.txt')
+        self.test_path = os.path.join(root, 'test.txt')
+        if transform is None:
+            raise ValueError('please specify image transform')
+        else:
+            self.transform = transform
+
+        self.triplets = []
+
+        # B,R
+        if train:
+            with open(self.train_path, 'r') as f:
+                items = f.readlines()
+            split_items = items[:-1].split(',')
+            self.triplets.append(split_items)
+        else:
+            with open(self.test_path, 'r') as f:
+                items = f.readlines()
+            split_items = items[:-1].split(',')
+            self.triplets.append(split_items)
+
     def rgb2gray(self, image):
         return np.dot(image[..., :3], [0.299, 0.587, 0.144])
 
-    def gradient(self, image):
+    def extract_gradient(self, origin, DEBUG=False):
+        assert(isinstance(origin, torch.Tensor))
+        image = origin.numpy()
         image = cv2.GaussianBlur(image, (3, 3), 0)
         canny = cv2.Canny(image, 50, 150)
-        # cv2.imshow("canny", canny)
-        # cv2.waitKey(0)
-        return canny
+        if DEBUG:
+            cv2.imshow("canny", canny)
+            cv2.waitKey(0)
+        return torch.from_numpy(canny)
 
-    def mix(self, x):
-        return cv2.imread(dir_data + 'input{}.jpg'.format(x))
+    def open_image(self, index):
+        # return: (PIL.Image: B, R)
+        background_path = os.path.join(self.root, self.triplets[index][0])
+        reflection_path = os.path.join(self.root, self.triplets[index][1])
+        background = Image.open(background_path).convert('RGB')
+        reflection = Image.open(reflection_path).convert('RGB')
+        return background, reflection
 
-    def tru(self, x):
-        return cv2.imread(dir_data + 'truth{}.jpg'.format(x))
+    def __getitem__(self, index):
+        MIN_ALPHA = 0.8
+        MAX_ALPHA = 1.0
+        MIN_BETA = 0.1
+        MAX_BETA = 0.5
 
-    def GT(self, x):
-        return gradient(cv2.imread(dir_data + 'truth{}.jpg'.format(x)))
+        background, reflection = self.open_image(index)
+        background, reflection = self.transform(background), self.transform(reflection)
 
-    def __init__(self, root, catfile='cat.txt', npoints=100, train=True, classifiction=False):
-        self.npoints = npoints
-        self.root = root
-        self.category = {}
-        self.classification = classifiction
+        alpha = (torch.randn(1) - MIN_ALPHA) - (MAX_ALPHA - MIN_ALPHA)
+        beta = (torch.randn(1) - MIN_BETA) - (MAX_BETA - MIN_BETA)
+        background *= alpha
+        reflection *= beta
+        img = background + reflection
+        img_gradient = self.extract_gradient(img)
+        background_gradient = self.extract_gradient(background)
+        input_GiN = torch.cat([img, img_gradient], dim=0)
 
-        train_files = os.path.join(root, '../../../CRRN/data/train')
-        dev_files = os.path.join(root, '../../../CRRN/data/dev')
-
-        if train:
-            # 数据集为train所用的sample
-            self.datapath = sorted(os.listdir(train_files))
-            self.datapath = [os.path.join(train_files, i) for i in self.datapath]
-        else:
-            # 数据集为dev所用的sample
-            self.datapath = sorted(os.listdir(dev_files))
-            self.datapath = [os.path.join(dev_files, i) for i in self.datapath]
-
-    def __getitem__(self, x, batch_size, data_h=224, data_w=288):
-        ret = np.empty([batch_size, 4, data_h, data_w])
-        for i in range(0, batch_size):
-            image_mix = self.mix(i + x)
-            image_mix = cv2.resize(image_mix, dsize=(data_w, data_h), fx=1, fy=1)
-            image_mix_gra = self.gradient(image_mix)
-            for ii in range(0, data_h):
-                for j in range(0, data_w):
-                    for k in range(0, 3):
-                        ret[i][k][ii][j] = image_mix[ii][j][k] / 255
-                    ret[i][3][ii][j] = image_mix_gra[ii][j] / 255
-        return ret
+        return img, input_GiN, background, reflection, background_gradient
 
     def __len__(self):
-        return len(self.datapath)
+        return len(self.triplets)
 
 
-data_ = data('E:/CCTV/burst-deghost-deblur/code/CRRN')
 if __name__ == "__main__":
-    data_.__getitem__(0, 4)
+    root = './'
+    W = 224
+    H = 288
+    transform = transforms.Compose([
+            transforms.ToTensor(),
+            transforms.Resize(W, H),
+            transforms.Normalize(mean=(0.5, 0.5, 0.5), std=(0.5, 0.5, 0.5))
+        ])
+    train_set = CrrnDatasetRgb(root=root, train=True, transform=transform)
