@@ -99,8 +99,9 @@ def main(args):
     else:
         raise ValueError("input GiN type: {}".format(args.GiN))
     GiN = GiN.cuda()
+    GiN.to_cuda()
 
-    optimizer = torch.optim.Adam([GiN.parameters, args.lr, weight_decay=args.weight_decay)
+    optimizer = torch.optim.Adam(GiN.parameters(), args.lr, weight_decay=args.weight_decay)
     lr_scheduler = MultiStepLR(optimizer, milestones=[40], gamma=0.1)
 
     if args.load_path_GiN:
@@ -114,12 +115,8 @@ def main(args):
         os.mkdir(exp_dir)
 
     root = args.root
-    transform = transforms.Compose([
-                    transforms.ToTensor(),
-                    transforms.Resize(args.resize_scale[0])
-                    transforms.Normalize(mean=(0.5, 0.5, 0.5), std=(0.5, 0.5, 0.5))])
-    train_set = CrrnDatasetRgb(root=root, train=True, transform=transform)
-    test_set = CrrnDatasetRgb(root=root, train=False, transform=transform)
+    train_set = CrrnDatasetRgb(root=root, train=True)
+    test_set = CrrnDatasetRgb(root=root, train=False)
     train_dataloader = DataLoader(train_set, batch_size=args.batch_size,
                                   shuffle=True, num_workers=args.num_workers,
                                   pin_memory=True)
@@ -139,15 +136,15 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='CRRN GiN')
     parser.add_argument(
         '--load_path_GiN', default='./experiment/', type=str)
-    parser.add_argument('--root', default='./data/')
+    parser.add_argument('--root', default='./')
     parser.add_argument('--recover', default=False, type=bool)
     parser.add_argument('--epoch', default=40, type=int)
     parser.add_argument('--lr', default=1e-4, type=float)
     parser.add_argument('--weight_decay', default=1e-4, type=float)
-    parser.add_argument('--batch_size', default=64, type=int)
+    parser.add_argument('--batch_size', default=32, type=int)
     parser.add_argument('--GiN', default='GradientInferenceNetwork', type=str)
     parser.add_argument('--multi_scale', default=False)
-    parser.add_argument('--resize_scale',[(224, 288), (96, 160)])
+    parser.add_argument('--resize_scale',default=[(224, 288), (96, 160)])
     parser.add_argument('--num_workers', default=8, type=int)
     parser.add_argument('--evaluate', default=False, type=bool)
     parser.add_argument('--loss_function', default='GiN_loss', type=str)
