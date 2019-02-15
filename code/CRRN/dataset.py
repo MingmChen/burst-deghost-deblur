@@ -66,7 +66,9 @@ class CrrnDatasetRgb(Dataset):
         reflection = (beta*reflection).astype(np.uint8)
         img = background + reflection
         img_gradient = self.extract_gradient(img)
-        background_gradient = self.extract_gradient(background)
+        H, W, C = background.shape
+        background_downsample = cv2.resize(background, (W//4, H//4))
+        background_gradient = self.extract_gradient(background_downsample)
 
         background = torch.from_numpy(background).float().permute(2, 0, 1)
         reflection = torch.from_numpy(reflection).float().permute(2, 0, 1)
