@@ -135,6 +135,11 @@ def CRRN_loss(estimate_B, gt_B, estimate_R, gt_R, estimate_g_B, gt_g_B):
     return ret
 
 
+def GiN_loss(estimate_g_B, gt_g_B):
+    si_criterion = SILoss(channel=1, max_val=1.0)
+    return si_criterion(estimate_g_B, gt_g_B)
+
+
 def unit_test_gausskernel():
     kernel_size = 5
     sigma = 1.0
