@@ -2,3 +2,6 @@
 *.swp
 *.sh
 ./code/CRRN/experiment
+./code/CRRN/utils.py
+./code/CRRN/distributed_utils.py
+./code/CRRN/main.py

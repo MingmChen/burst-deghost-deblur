@@ -115,8 +115,10 @@ def main(args):
         os.mkdir(exp_dir)
 
     root = args.root
-    train_set = CrrnDatasetRgb(root=root, train=True)
-    test_set = CrrnDatasetRgb(root=root, train=False)
+    normalize = transforms.Normalize(mean=[0.5, 0.5, 0.5],
+                                     std=[0.5, 0.5, 0.5])
+    train_set = CrrnDatasetRgb(root=root, train=True, transform=normalize)
+    test_set = CrrnDatasetRgb(root=root, train=False, transform=normalize)
     train_dataloader = DataLoader(train_set, batch_size=args.batch_size,
                                   shuffle=True, num_workers=args.num_workers,
                                   pin_memory=True)

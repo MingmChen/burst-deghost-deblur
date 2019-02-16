@@ -14,6 +14,10 @@ class CrrnDatasetRgb(Dataset):
         self.test_path = os.path.join(root, 'test.txt')
         self.resize_scale = (224, 288)
         self.triplets = []
+        if transform is None:
+            raise ValueError
+        else:
+            self.transform = transform
 
         # B,R
         if train:
@@ -76,6 +80,12 @@ class CrrnDatasetRgb(Dataset):
         background_gradient = torch.from_numpy(background_gradient).float().unsqueeze(0)
         img_gradient = torch.from_numpy(img_gradient).float().unsqueeze(0)
         input_GiN = torch.cat([img, img_gradient], dim=0)
+
+        img = self.transform(img)
+        input_GiN = self.transform(input_GiN)
+        background = self.transform(background)
+        reflection = self.transform(reflection)
+        background_gradient = self.transform(background_gradient)
 
         return img, input_GiN, background, reflection, background_gradient
 
