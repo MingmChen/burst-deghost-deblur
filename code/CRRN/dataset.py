@@ -2,7 +2,6 @@ import cv2
 import os.path
 import torch
 from torch.utils.data import Dataset
-from torchvision import transforms
 import numpy as np
 from PIL import Image
 
@@ -13,44 +12,46 @@ class CrrnDatasetRgb(Dataset):
         self.root = root
         self.train_path = os.path.join(root, 'train.txt')
         self.test_path = os.path.join(root, 'test.txt')
+        self.resize_scale = (224, 288)
+        self.triplets = []
         if transform is None:
-            raise ValueError('please specify image transform')
+            raise ValueError
         else:
             self.transform = transform
-
-        self.triplets = []
 
         # B,R
         if train:
             with open(self.train_path, 'r') as f:
                 items = f.readlines()
-            split_items = items[:-1].split(',')
-            self.triplets.append(split_items)
+            for item in items:
+                split_items = item[:-1].split(',')
+                self.triplets.append(split_items)
         else:
             with open(self.test_path, 'r') as f:
                 items = f.readlines()
-            split_items = items[:-1].split(',')
-            self.triplets.append(split_items)
+            for item in items:
+                split_items = item[:-1].split(',')
+                self.triplets.append(split_items)
 
     def rgb2gray(self, image):
         return np.dot(image[..., :3], [0.299, 0.587, 0.144])
 
     def extract_gradient(self, origin, DEBUG=False):
-        assert(isinstance(origin, torch.Tensor))
-        image = origin.numpy()
+        assert(isinstance(origin, np.ndarray))
+        image = np.copy(origin)
         image = cv2.GaussianBlur(image, (3, 3), 0)
         canny = cv2.Canny(image, 50, 150)
         if DEBUG:
             cv2.imshow("canny", canny)
             cv2.waitKey(0)
-        return torch.from_numpy(canny)
+        return canny
 
     def open_image(self, index):
-        # return: (PIL.Image: B, R)
+        # return: (np.ndarray: B, R)
         background_path = os.path.join(self.root, self.triplets[index][0])
         reflection_path = os.path.join(self.root, self.triplets[index][1])
-        background = Image.open(background_path).convert('RGB')
-        reflection = Image.open(reflection_path).convert('RGB')
+        background = cv2.imread(background_path)
+        reflection = cv2.imread(reflection_path)
         return background, reflection
 
     def __getitem__(self, index):
@@ -60,16 +61,31 @@ class CrrnDatasetRgb(Dataset):
         MAX_BETA = 0.5
 
         background, reflection = self.open_image(index)
-        background, reflection = self.transform(background), self.transform(reflection)
+        background = cv2.resize(background, self.resize_scale)
+        reflection = cv2.resize(reflection, self.resize_scale)
 
-        alpha = (torch.randn(1) - MIN_ALPHA) - (MAX_ALPHA - MIN_ALPHA)
-        beta = (torch.randn(1) - MIN_BETA) - (MAX_BETA - MIN_BETA)
-        background *= alpha
-        reflection *= beta
+        alpha = (np.random.randn(1) - MIN_ALPHA) / (MAX_ALPHA - MIN_ALPHA)
+        beta = (np.random.randn(1) - MIN_BETA) / (MAX_BETA - MIN_BETA)
+        background = (alpha*background).astype(np.uint8)
+        reflection = (beta*reflection).astype(np.uint8)
         img = background + reflection
         img_gradient = self.extract_gradient(img)
-        background_gradient = self.extract_gradient(background)
+        H, W, C = background.shape
+        background_downsample = cv2.resize(background, (W//4, H//4))
+        background_gradient = self.extract_gradient(background_downsample)
+
+        background = torch.from_numpy(background).float().permute(2, 0, 1)
+        reflection = torch.from_numpy(reflection).float().permute(2, 0, 1)
+        img = torch.from_numpy(img).float().permute(2, 0, 1)
+        background_gradient = torch.from_numpy(background_gradient).float().unsqueeze(0)
+        img_gradient = torch.from_numpy(img_gradient).float().unsqueeze(0)
         input_GiN = torch.cat([img, img_gradient], dim=0)
+
+        img = self.transform(img)
+        input_GiN = self.transform(input_GiN)
+        background = self.transform(background)
+        reflection = self.transform(reflection)
+        background_gradient = self.transform(background_gradient)
 
         return img, input_GiN, background, reflection, background_gradient
 
@@ -81,9 +97,9 @@ if __name__ == "__main__":
     root = './'
     W = 224
     H = 288
-    transform = transforms.Compose([
-            transforms.ToTensor(),
-            transforms.Resize(W, H),
-            transforms.Normalize(mean=(0.5, 0.5, 0.5), std=(0.5, 0.5, 0.5))
-        ])
-    train_set = CrrnDatasetRgb(root=root, train=True, transform=transform)
+    train_set = CrrnDatasetRgb(root=root, train=True)
+    print(len(train_set))
+    img, input_GiN, background, reflection, background_gradient = train_set[0]
+    print('img', img.shape)
+    print('input_GiN', img.shape)
+    print('background_gradient', background_gradient.shape)
