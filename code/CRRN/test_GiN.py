@@ -6,10 +6,10 @@ from receptivefield.image import get_default_image
 from receptivefield.types import ImageShape
 from collections import OrderedDict
 import torch
-import base_model.nn_module as M
 import sys
 
-sys.path.append('')
+sys.path.append('../')
+import base_model.nn_module as M
 
 
 class Linear(nn.Module):
@@ -23,7 +23,7 @@ class GradientInferenceNetwork(nn.Module):
     encoder_list = [64, 128, 256, 512, 512]
     decoder_list = [256, 128, 64, 32]
 
-    def __init__(self, init_type="xavier", use_batchnorm=True, use_maxpool=False, DEBUG=False):
+    def __init__(self, init_type="xavier", use_batchnorm=False, use_maxpool=False, DEBUG=False):
         super(GradientInferenceNetwork, self).__init__()
         self.init_type = init_type
         self.bn = use_batchnorm
@@ -164,6 +164,7 @@ class GradientInferenceNetwork(nn.Module):
             self.feature_maps.append(x)  #add feature_maps
 
         x = self.mid(x)
+        self.feature_maps.append(x)
         '''
         gradient_guide = []
         count = 1

@@ -4,6 +4,7 @@ from numpy.testing import assert_allclose
 from receptivefield.pytorch import PytorchReceptiveField
 from receptivefield.image import get_default_image
 from receptivefield.types import ImageShape
+import matplotlib.pyplot as plt
 
 
 class Linear(nn.Module):
@@ -58,8 +59,25 @@ class SimpleVGG(nn.Module):
         ]
 
 
+class NaiveNet(nn.Module):
+    def __init__(self):
+        super(NaiveNet, self).__init__()
+        self.conv1 = nn.Conv2d(3, 64, kernel_size=3, stride=1, dilation=2)
+        self.conv2 = nn.Conv2d(64, 64, kernel_size=3, stride=1)
+        self.feature_maps = None
+
+    def forward(self, x):
+        self.feature_maps = []
+        x = self.conv1(x)
+        self.feature_maps.append(x)
+        x = self.conv2(x)
+        self.feature_maps.append(x)
+        return x
+
+
 def model_fn() -> nn.Module:
-    model = SimpleVGG(disable_activations=True)
+    #model = SimpleVGG(disable_activations=True)
+    model = NaiveNet()
     model.eval()
     return model
 
@@ -69,6 +87,15 @@ def get_test_image(shape=(64, 64), tile_factor=0):
     return image
 
 
+def test_naive_network():
+    input_shape = [96, 96, 3]
+    rf = PytorchReceptiveField(model_fn)
+    rf_params = rf.compute(input_shape=ImageShape(*input_shape))
+    rf.plot_rf_grids(custom_image=get_default_image(input_shape, name='cat'), plot_naive_rf=False)
+    plt.show()
+
+
+'''
 def test_example_network():
     input_shape = [96, 96, 3]
     rf = PytorchReceptiveField(model_fn)
@@ -87,8 +114,10 @@ def test_example_network():
 
     rf.plot_gradient_at(fm_id=1, point=(9, 9))
     # rf.plot_rf_grids(get_default_image(input_shape, name='cat'),plot_naive_rf=True, figsize=(20, 12))
+'''
 
 
 if __name__ == "__main__":
     pytest.main([__file__])
-    test_example_network()
+    #test_example_network()
+    test_naive_network()
