@@ -23,7 +23,7 @@ class GradientInferenceNetwork(nn.Module):
     encoder_list = [64, 128, 256, 512, 512]
     decoder_list = [256, 128, 64, 32]
 
-    def __init__(self, init_type="xavier", use_batchnorm=True, use_maxpool=False, DEBUG=False):
+    def __init__(self, init_type="xavier", use_batchnorm=False, use_maxpool=False, DEBUG=False):
         super(GradientInferenceNetwork, self).__init__()
         self.init_type = init_type
         self.bn = use_batchnorm
