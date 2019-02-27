@@ -76,8 +76,8 @@ class NaiveNet(nn.Module):
 
 
 def model_fn() -> nn.Module:
-    #model = SimpleVGG(disable_activations=True)
-    model = NaiveNet()
+    model = SimpleVGG(disable_activations=True)
+    #model = NaiveNet()
     model.eval()
     return model
 
@@ -87,6 +87,7 @@ def get_test_image(shape=(64, 64), tile_factor=0):
     return image
 
 
+'''
 def test_naive_network():
     input_shape = [96, 96, 3]
     rf = PytorchReceptiveField(model_fn)
@@ -97,7 +98,7 @@ def test_naive_network():
 
 '''
 def test_example_network():
-    input_shape = [96, 96, 3]
+    input_shape = [120, 120, 3]
     rf = PytorchReceptiveField(model_fn)
     rf_params = rf.compute(input_shape=ImageShape(*input_shape))
 
@@ -112,12 +113,12 @@ def test_example_network():
     assert_allclose(rf_params[2].rf.size, (rs, rs))
     assert_allclose(rf_params[2].rf.stride, (8, 8))
 
-    rf.plot_gradient_at(fm_id=1, point=(9, 9))
-    # rf.plot_rf_grids(get_default_image(input_shape, name='cat'),plot_naive_rf=True, figsize=(20, 12))
-'''
+    #rf.plot_gradient_at(fm_id=1, point=(9, 9))
+    rf.plot_rf_grids(get_default_image(input_shape, name='cat'), plot_naive_rf=False, figsize=(6, 6))
+    plt.show()
 
 
 if __name__ == "__main__":
     pytest.main([__file__])
-    #test_example_network()
-    test_naive_network()
+    test_example_network()
+    #test_naive_network()
