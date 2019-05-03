@@ -174,4 +174,5 @@ class SythesizeBlur(nn.Module):
         pass
 
 if __name__ == '__main__':
-    
+    net = SythesizeBlur()
+    print(net)
