@@ -203,14 +203,13 @@ class SythesizeBlur(nn.Module):
         weight2 = self.weight2(x)   # Nx17xHxW
 
         # todo feed line prediction layer
-        sample = self.Violent_cycle(offset1, offset2, weight1, weight2, inp1, inp2)
+        sample = self.violent_cycle(offset1, offset2, weight1, weight2, inp1, inp2)
 
         return sample
 
-    def Violent_cycle(self, _offset1, _offset2, _weight1, _weight2, _inp1, _inp2):
+    def violent_cycle(self, _offset1, _offset2, _weight1, _weight2, _inp1, _inp2):
         '''
             Q1: 取完gird再加上offset?
-            系数这边怎么取?
         '''
         theta = torch.tensor([[[1, 0, 0], [0, 1, 0]]]).repeat(self.minibatch, 1, 1)  # Nx2x3
         grid = nn.functional.affine_grid(theta, torch.Size((self.minibatch, self.shape)))
