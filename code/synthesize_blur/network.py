@@ -5,9 +5,35 @@ version 1: without any encapsulation
 '''
 import torch
 import torch.nn as nn
+dtype = torch.cuda.FloatTensor
+dtype_long = torch.cuda.LongTensor
 import torchvision
 import os
 
+
+def bilinear_interpolate_torch(im, x, y):
+    x0 = torch.floor(x).type(dtype_long)
+    x1 = x0 + 1
+
+    y0 = torch.floor(y).type(dtype_long)
+    y1 = y0 + 1
+
+    x0 = torch.clamp(x0, 0, im.shape[1] - 1)
+    x1 = torch.clamp(x1, 0, im.shape[1] - 1)
+    y0 = torch.clamp(y0, 0, im.shape[0] - 1)
+    y1 = torch.clamp(y1, 0, im.shape[0] - 1)
+
+    Ia = im[y0, x0][0]
+    Ib = im[y1, x0][0]
+    Ic = im[y0, x1][0]
+    Id = im[y1, x1][0]
+
+    wa = (x1.type(dtype) - x) * (y1.type(dtype) - y)
+    wb = (x1.type(dtype) - x) * (y - y0.type(dtype))
+    wc = (x - x0.type(dtype)) * (y1.type(dtype) - y)
+    wd = (x - x0.type(dtype)) * (y - y0.type(dtype))
+
+    return torch.t((torch.t(Ia) * wa)) + torch.t(torch.t(Ib) * wb) + torch.t(torch.t(Ic) * wc) + torch.t(torch.t(Id) * wd)
 
 class SythesizeBlur(nn.Module):
     def __init__(self):
@@ -113,34 +139,39 @@ class SythesizeBlur(nn.Module):
         # todo line prediction layer
 
 
-    def forward(self, x):
+    def forward(self, inp1,inp2):
         '''
-        x: NCHW, C:6, H:256, W:256
+        input: NCHW, C:6, H:256, W:256
         output: synthesize image
         '''
+
+        self.shape = inp1.shape
+        self.minibatch = inp1.shape[0]
+
+        x = torch.cat([inp1,inp2], dim=1)
         x = self.relu11( self.conv11(x))
         x = self.relu12( self.conv12(x))
         relu13 = self.relu13( self.conv13(x))
-        x = self.maxpool1(relu13)
+        x = self.maxpool1(relu13(x))
 
         x = self.relu21( self.conv21(x))
         x = self.relu22( self.conv22(x))
         relu23 = self.relu23( self.conv23(x))
-        x = self.maxpool2(relu23)
+        x = self.maxpool2(relu23(x))
 
         x = self.relu31( self.conv31(x))
         x = self.relu32( self.conv32(x))
         relu33 = self.relu33( self.conv33(x))
-        x = self.maxpool3(relu33)
+        x = self.maxpool3(relu33(x))
 
         x = self.relu41( self.conv41(x))
         x = self.relu42( self.conv42(x))
         relu43 = self.relu43( self.conv43(x))
-        x = self.maxpool4(relu43)
+        x = self.maxpool4(relu43(x))
 
-        x = self.relu51( self.conv51)
-        x = self.relu52( self.conv52)
-        x = self.relu53( self.conv53)
+        x = self.relu51( self.conv51(x))
+        x = self.relu52( self.conv52(x))
+        x = self.relu53( self.conv53(x))
 
         x = self.up6(x)
         x = self.relu61(self.conv61(x))
@@ -166,13 +197,37 @@ class SythesizeBlur(nn.Module):
         x = self.relu92(self.conv92(x))
         x = self.relu93(self.conv93(x))
 
-        offset1 = self.offset1(x)
-        offset2 = self.offset2(x)
-        weight1 = self.weight1(x)
-        weight2 = self.weight2(x)
+        offset1 = self.offset1(x)   # Nx2xHxW
+        offset2 = self.offset2(x)   # Nx2xHxW
+        weight1 = self.weight1(x)   # Nx17xHxW
+        weight2 = self.weight2(x)   # Nx17xHxW
 
         # todo feed line prediction layer
-        pass
+        sample = self.Violent_cycle(offset1, offset2, weight1, weight2, inp1, inp2)
+
+        return sample
+
+    def Violent_cycle(self, _offset1, _offset2, _weight1, _weight2, _inp1, _inp2):
+        '''
+            Q1: 取完gird再加上offset?
+            系数这边怎么取?
+        '''
+        theta = torch.tensor([[[1, 0, 0], [0, 1, 0]]]).repeat(self.minibatch, 1, 1)  # Nx2x3
+        grid = nn.functional.affine_grid(theta, torch.Size((self.minibatch, self.shape)))
+
+        sample = torch.zeros_like(_inp1)
+        for n in range(self.N):
+            grid1 = torch.clamp(grid + ( n / self.N) * (_offset1.permute(0, 2, 3, 1)), -1, 1) #Nx2xHxW --> NxHxWx2
+            sample_n1 = nn.functional.grid_sample(_inp1, grid1)
+            sample += (_weight1[:, n, :, :]).unsqueeze(1) * sample_n1
+
+        for n in range(self.N):
+            grid2 = torch.clamp(grid + (n / self.N) * (_offset2.permute(0, 2, 3, 1)), -1, 1)
+            sample_n2 = nn.functional.grid_sample(_inp2, grid2)
+            sample += (_weight2[:, n, :, :]).unsquzee(1) * sample_n2
+
+        return sample
+
 
 if __name__ == '__main__':
     net = SythesizeBlur()
