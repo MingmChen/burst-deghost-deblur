@@ -56,7 +56,7 @@ class SythesizeBlur(nn.Module):
         self.relu21 = nn.LeakyReLU(self.LeakRate)
         self.conv22 = nn.Conv2d(64, 64, kernel_size=3, stride=1, padding=1)
         self.relu22 = nn.LeakyReLU(self.LeakRate)
-        self.Conv23 = nn.Conv2d(64, 64, kernel_size=3, stride=1, padding=1)
+        self.conv23 = nn.Conv2d(64, 64, kernel_size=3, stride=1, padding=1)
         self.relu23 = nn.LeakyReLU(self.LeakRate)
         self.maxpool2 = nn.MaxPool2d(kernel_size=2, stride=2)
 
@@ -70,7 +70,7 @@ class SythesizeBlur(nn.Module):
         self.maxpool3 = nn.MaxPool2d(kernel_size=2, stride=2)
 
         '''encoder 4'''
-        self.conv41 = nn.Conv2d(256, 256, kernel_size=3, stride=1, padding=1)
+        self.conv41 = nn.Conv2d(128, 256, kernel_size=3, stride=1, padding=1)
         self.relu41 = nn.LeakyReLU(self.LeakRate)
         self.conv42 = nn.Conv2d(256, 256, kernel_size=3, stride=1, padding=1)
         self.relu42 = nn.LeakyReLU(self.LeakRate)
@@ -152,22 +152,22 @@ class SythesizeBlur(nn.Module):
         x = self.relu11( self.conv11(x))
         x = self.relu12( self.conv12(x))
         relu13 = self.relu13( self.conv13(x))
-        x = self.maxpool1(relu13(x))
+        x = self.maxpool1(relu13)
 
         x = self.relu21( self.conv21(x))
         x = self.relu22( self.conv22(x))
         relu23 = self.relu23( self.conv23(x))
-        x = self.maxpool2(relu23(x))
+        x = self.maxpool2(relu23)
 
         x = self.relu31( self.conv31(x))
         x = self.relu32( self.conv32(x))
         relu33 = self.relu33( self.conv33(x))
-        x = self.maxpool3(relu33(x))
+        x = self.maxpool3(relu33)
 
         x = self.relu41( self.conv41(x))
         x = self.relu42( self.conv42(x))
         relu43 = self.relu43( self.conv43(x))
-        x = self.maxpool4(relu43(x))
+        x = self.maxpool4(relu43)
 
         x = self.relu51( self.conv51(x))
         x = self.relu52( self.conv52(x))
@@ -211,8 +211,8 @@ class SythesizeBlur(nn.Module):
         '''
             Q1: 取完gird再加上offset?
         '''
-        theta = torch.tensor([[[1, 0, 0], [0, 1, 0]]]).repeat(self.minibatch, 1, 1)  # Nx2x3
-        grid = nn.functional.affine_grid(theta, torch.Size((self.minibatch, self.shape)))
+        theta = torch.tensor([[[1, 0, 0], [0, 1, 0]]], dtype=torch.float).repeat(self.minibatch, 1, 1)  # Nx2x3
+        grid = nn.functional.affine_grid(theta, self.shape)
 
         sample = torch.zeros_like(_inp1)
         for n in range(self.N):
@@ -223,7 +223,7 @@ class SythesizeBlur(nn.Module):
         for n in range(self.N):
             grid2 = torch.clamp(grid + (n / self.N) * (_offset2.permute(0, 2, 3, 1)), -1, 1)
             sample_n2 = nn.functional.grid_sample(_inp2, grid2)
-            sample += (_weight2[:, n, :, :]).unsquzee(1) * sample_n2
+            sample += (_weight2[:, n, :, :]).unsqueeze(1) * sample_n2
 
         return sample
 

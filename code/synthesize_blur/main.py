@@ -23,8 +23,7 @@ def main():
         optimizer.zero_grad()
         loss.backward()
         optimizer.step()
-        if (idx + 1) % 100 == 0:
-            print("idx-{},loss:{}".format(idx+1, loss))
+        print("idx-{},loss:{}".format(idx+1, loss))
 
 
 
