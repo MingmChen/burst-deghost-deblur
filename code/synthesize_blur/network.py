@@ -42,7 +42,10 @@ def bilinear_interpolate_torch(im, x, y):
 class SythesizeBlur(nn.Module):
     def __init__(self):
         super(SythesizeBlur, self).__init__()
-        self.device = 'cpu'
+        if torch.cuda.is_available():
+            self.device = 'cuda'
+        else:
+            self.device = 'cpu'
 
         self.LeakRate = 0.2
         self.N = 17  # N evnely-spaced discrete samples
@@ -225,10 +228,10 @@ class SythesizeBlur(nn.Module):
         B, C, H, W = _inp1.shape
         norm_factor = torch.FloatTensor([H/2, W/2]).to(self.device)
         theta = torch.tensor([[[1, 0, 0], [0, 1, 0]]], dtype=torch.float).repeat(
-            self.minibatch, 1, 1)  # Nx2x3
+            self.minibatch, 1, 1).to(self.device)  # Nx2x3
         grid = nn.functional.affine_grid(theta, self.shape).mul_(norm_factor)
 
-        sample = torch.zeros_like(_inp1)
+        sample = torch.zeros_like(_inp1).to(self.device)
         for n in range(self.N):
             # Nx2xHxW --> NxHxWx2
             grid1 = torch.clamp(grid + (n / self.N) *
@@ -282,6 +285,9 @@ class SythesizeBlur(nn.Module):
 def test_synthesize_blur():
     net = SythesizeBlur()
     inputs = torch.randn(4, 3, 256, 256)
+    if torch.cuda.is_available():
+        net = net.cuda()
+        inputs = inputs.cuda()
     out = net(inputs, inputs)
 
 
