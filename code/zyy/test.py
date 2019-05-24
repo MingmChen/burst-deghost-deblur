@@ -14,7 +14,7 @@ def myconv(mat, weight, kernel=3, stride=1, padding=1, paddingmode="reflect"):
     weight = weight.reshape(1, outchannel, inchannel, 1, kernel * kernel)
     weight = weight.expand(groups, -1, -1, newH * newW, -1)
 
-    change = nn.Unfold((3, 3), padding=0, stride=stride)
+    change = nn.Unfold((kernel, kernel), padding=0, stride=stride)
     mat = change(mat)
     mat = mat.reshape(groups, inchannel, -1, mat.shape[2])
     mat = torch.transpose(mat, 2, 3)
@@ -26,6 +26,9 @@ def myconv(mat, weight, kernel=3, stride=1, padding=1, paddingmode="reflect"):
     ret = torch.sum(ret, 2)
     ret = ret.reshape(groups, -1, newH, newW)
     return ret
+
+def lp_pooling(mat, stride, p):
+
 
 
 if __name__ == '__main__':
