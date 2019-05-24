@@ -1,5 +1,3 @@
-from typing import Any, Union
-
 import torch
 from torch import nn
 
