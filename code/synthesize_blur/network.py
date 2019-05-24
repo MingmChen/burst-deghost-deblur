@@ -5,6 +5,7 @@ version 1: without any encapsulation
 '''
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 import sys
 sys.path.append('../')
 from utils.log import time_log
@@ -41,6 +42,7 @@ def bilinear_interpolate_torch(im, x, y):
 class SythesizeBlur(nn.Module):
     def __init__(self):
         super(SythesizeBlur, self).__init__()
+        self.device = 'cpu'
 
         self.LeakRate = 0.2
         self.N = 17  # N evnely-spaced discrete samples
@@ -213,31 +215,66 @@ class SythesizeBlur(nn.Module):
         # todo feed line prediction layer
         sample = self.violent_cycle(
             offset1, offset2, weight1, weight2, inp1, inp2)
+        sample = self.line_prediction(
+            offset1, offset2, weight1, weight2, inp1, inp2)
 
         return sample
 
     @time_log
     def violent_cycle(self, _offset1, _offset2, _weight1, _weight2, _inp1, _inp2):
-        '''
-            Q1: 取完gird再加上offset?
-        '''
+        B, C, H, W = _inp1.shape
+        norm_factor = torch.FloatTensor([H/2, W/2]).to(self.device)
         theta = torch.tensor([[[1, 0, 0], [0, 1, 0]]], dtype=torch.float).repeat(
             self.minibatch, 1, 1)  # Nx2x3
-        grid = nn.functional.affine_grid(theta, self.shape)
+        grid = nn.functional.affine_grid(theta, self.shape).mul_(norm_factor)
 
         sample = torch.zeros_like(_inp1)
         for n in range(self.N):
             # Nx2xHxW --> NxHxWx2
             grid1 = torch.clamp(grid + (n / self.N) *
                                 (_offset1.permute(0, 2, 3, 1)), -1, 1)
-            sample_n1 = nn.functional.grid_sample(_inp1, grid1)
+            grid1.div_(norm_factor)
+            sample_n1 = nn.functional.grid_sample(_inp1, grid1, padding_mode='border')
             sample += (_weight1[:, n, :, :]).unsqueeze(1) * sample_n1
 
         for n in range(self.N):
             grid2 = torch.clamp(grid + (n / self.N) *
                                 (_offset2.permute(0, 2, 3, 1)), -1, 1)
-            sample_n2 = nn.functional.grid_sample(_inp2, grid2)
+            grid2.div_(norm_factor)
+            sample_n2 = nn.functional.grid_sample(_inp2, grid2, padding_mode='border')
             sample += (_weight2[:, n, :, :]).unsqueeze(1) * sample_n2
+
+        return sample
+
+    @time_log
+    def line_prediction(self, offset1, offset2, weight1, weight2, img1, img2):
+        N = self.N
+        B, C, H, W = img1.shape
+        norm_factor = torch.FloatTensor([H/2, W/2]).to(self.device)
+        theta = torch.FloatTensor([1, 0, 0, 0, 1, 0]).view(1, 2, 3).repeat(B, 1, 1).to(self.device)
+        grid = F.affine_grid(theta, self.shape)
+        grid.mul_(norm_factor).unsqueeze_(0)
+
+        offset1_sample = offset1.permute(0, 2, 3, 1).contiguous().unsqueeze(0).repeat(N, 1, 1, 1, 1)
+        offset2_sample = offset2.permute(0, 2, 3, 1).contiguous().unsqueeze(0).repeat(N, 1, 1, 1, 1)
+        sample_factor = torch.FloatTensor([x for x in range(N)]).view(N, 1, 1, 1, 1).to(self.device)
+
+        offset1_sample.mul_(sample_factor).add_(grid).div_(norm_factor)
+        offset2_sample.mul_(sample_factor).add_(grid).div_(norm_factor)
+
+        sample1 = []
+        sample2 = []
+        for n in range(N):
+            sample1.append(F.grid_sample(img1, offset1_sample[n], padding_mode='border'))
+            sample2.append(F.grid_sample(img2, offset2_sample[n], padding_mode='border'))
+
+        sample1 = torch.stack(sample1, dim=1)
+        sample2 = torch.stack(sample2, dim=1)
+
+        weight1 = weight1.view(B, N, 1, H, W)
+        weight2 = weight2.view(B, N, 1, H, W)
+
+        sample = (weight1*sample1 + weight2*sample2).sum(dim=1)
 
         return sample
 
