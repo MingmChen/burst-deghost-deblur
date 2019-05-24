@@ -1,12 +1,12 @@
 import sys
 import torch
 import torch.nn as nn
-sys.path.append('..')
+sys.path.append('../..')
 import base_model.nn_module as M
 
 
 class LayerConv(nn.Module):
-    def __init__(self, in_channels, out_channels, layers=3, init_type="xavier", activation=nn.ReLU(), use_batchnorm=False):
+    def __init__(self, in_channels, out_channels, layers=3, init_type="xavier", activation=nn.ReLU(), norm_type=None):
         super(LayerConv, self).__init__()
         convs = []
         for i in range(layers):
@@ -20,7 +20,7 @@ class LayerConv(nn.Module):
                         padding=1,
                         init_type=init_type,
                         activation=activation,
-                        use_batchnorm=use_batchnorm
+                        norm_type=norm_type
                         )
                     )
             else:
@@ -33,7 +33,7 @@ class LayerConv(nn.Module):
                         padding=1,
                         init_type=init_type,
                         activation=activation,
-                        use_batchnorm=use_batchnorm
+                        norm_type=norm_type
                         )
                     )
         self.main = nn.Sequential(*convs)
@@ -44,7 +44,7 @@ class LayerConv(nn.Module):
 
 
 class DownsampleConv(nn.Module):
-    def __init__(self, in_channels, out_channels, layers, downsample_type="maxpool", init_type="xavier", activation=nn.ReLU(), use_batchnorm=False):
+    def __init__(self, in_channels, out_channels, layers, downsample_type="maxpool", init_type="xavier", activation=nn.ReLU(), norm_type='bn'):
         super(DownsampleConv, self).__init__()
         if downsample_type == "maxpool":
             self.downsample = nn.MaxPool2d(kernel_size=2)
@@ -57,7 +57,7 @@ class DownsampleConv(nn.Module):
                     padding=1,
                     init_type=init_type,
                     activation=activation,
-                    use_batchnorm=use_batchnorm
+                    norm_type=norm_type
                     )
         else:
             raise ValueError("invalid downsample type: {}".format(downsample_type))
@@ -73,7 +73,7 @@ class DownsampleConv(nn.Module):
                         padding=1,
                         init_type=init_type,
                         activation=activation,
-                        use_batchnorm=use_batchnorm
+                        norm_type=norm_type
                         )
                     )
             else:
@@ -86,7 +86,7 @@ class DownsampleConv(nn.Module):
                         padding=1,
                         init_type=init_type,
                         activation=activation,
-                        use_batchnorm=use_batchnorm
+                        norm_type=norm_type
                         )
                     )
         self.main = nn.Sequential(*convs)
@@ -98,7 +98,7 @@ class DownsampleConv(nn.Module):
 
 
 class UpsampleConv(nn.Module):
-    def __init__(self, in_channels, out_channels, layers, upsample_type="bilinear", init_type="xavier", activation=nn.ReLU(), use_batchnorm=False):
+    def __init__(self, in_channels, out_channels, layers, upsample_type="bilinear", init_type="xavier", activation=nn.ReLU(), norm_type='bn'):
         super(UpsampleConv, self).__init__()
         convs = []
         for i in range(layers):
@@ -112,7 +112,7 @@ class UpsampleConv(nn.Module):
                         padding=1,
                         init_type=init_type,
                         activation=activation,
-                        use_batchnorm=use_batchnorm
+                        norm_type=norm_type
                         )
                     )
             else:
@@ -125,7 +125,7 @@ class UpsampleConv(nn.Module):
                         padding=1,
                         init_type=init_type,
                         activation=activation,
-                        use_batchnorm=use_batchnorm
+                        norm_type=norm_type
                         )
                     )
         self.main = nn.Sequential(*convs)
@@ -140,7 +140,7 @@ class UpsampleConv(nn.Module):
                     padding=1,
                     init_type=init_type,
                     activation=activation,
-                    use_batchnorm=use_batchnorm
+                    norm_type=norm_type
                     )
         else:
             raise ValueError("invalid upsample type: {}".format(upsample_type))
@@ -153,7 +153,7 @@ class UpsampleConv(nn.Module):
 
 class MidConv(nn.Module):
     def __init__(self, in_channels, out_channels, layers, downsample_type="maxpool",
-                 upsample_type="bilinear", init_type="xavier", activation=nn.ReLU(), use_batchnorm=False):
+                 upsample_type="bilinear", init_type="xavier", activation=nn.ReLU(), norm_type='bn'):
         super(MidConv, self).__init__()
         if downsample_type == "maxpool":
             self.downsample = nn.MaxPool2d(kernel_size=2)
@@ -166,7 +166,7 @@ class MidConv(nn.Module):
                     padding=1,
                     init_type=init_type,
                     activation=activation,
-                    use_batchnorm=use_batchnorm
+                    norm_type=norm_type
                     )
         else:
             raise ValueError("invalid downsample type: {}".format(downsample_type))
@@ -182,7 +182,7 @@ class MidConv(nn.Module):
                         padding=1,
                         init_type=init_type,
                         activation=activation,
-                        use_batchnorm=use_batchnorm
+                        norm_type=norm_type
                         )
                     )
             else:
@@ -195,7 +195,7 @@ class MidConv(nn.Module):
                         padding=1,
                         init_type=init_type,
                         activation=activation,
-                        use_batchnorm=use_batchnorm
+                        norm_type=norm_type
                         )
                     )
         self.main = nn.Sequential(*convs)
@@ -211,7 +211,7 @@ class MidConv(nn.Module):
                     padding=1,
                     init_type=init_type,
                     activation=activation,
-                    use_batchnorm=use_batchnorm
+                    norm_type=norm_type
                     )
         else:
             raise ValueError("invalid upsample type: {}".format(upsample_type))
@@ -227,10 +227,10 @@ class BurstDeblurMP(nn.Module):
     encoder_list = [32, 64, 128, 256]
     decoder_list = [256, 128, 64, 32]
 
-    def __init__(self, in_channels=3, layers=2, init_type="xavier", use_batchnorm=False):
+    def __init__(self, in_channels=3, layers=2, init_type="xavier", norm_type='bn'):
         super(BurstDeblurMP, self).__init__()
         self.init_type = init_type
-        self.bn = use_batchnorm
+        self.bn = norm_type
         self.activation = nn.ELU()
         self.layers = layers
 
@@ -240,7 +240,7 @@ class BurstDeblurMP(nn.Module):
                     layers=self.layers,
                     init_type=self.init_type,
                     activation=self.activation,
-                    use_batchnorm=self.bn)
+                    norm_type=self.bn)
         self.fusion1 = M.conv2d_block(
                     in_channels=2*self.encoder_list[0],
                     out_channels=self.encoder_list[0],
@@ -249,7 +249,7 @@ class BurstDeblurMP(nn.Module):
                     padding=0,
                     init_type=self.init_type,
                     activation=self.activation,
-                    use_batchnorm=self.bn
+                    norm_type=self.bn
                 )
         self.downsample_conv1 = DownsampleConv(
                     in_channels=self.encoder_list[0],
@@ -257,7 +257,7 @@ class BurstDeblurMP(nn.Module):
                     layers=self.layers,
                     init_type=self.init_type,
                     activation=self.activation,
-                    use_batchnorm=self.bn
+                    norm_type=self.bn
                 )
         self.fusion2 = M.conv2d_block(
                     in_channels=2*self.encoder_list[1],
@@ -267,7 +267,7 @@ class BurstDeblurMP(nn.Module):
                     padding=0,
                     init_type=self.init_type,
                     activation=self.activation,
-                    use_batchnorm=self.bn
+                    norm_type=self.bn
                 )
         self.downsample_conv2 = DownsampleConv(
                     in_channels=self.encoder_list[1],
@@ -275,7 +275,7 @@ class BurstDeblurMP(nn.Module):
                     layers=self.layers,
                     init_type=self.init_type,
                     activation=self.activation,
-                    use_batchnorm=self.bn
+                    norm_type=self.bn
                 )
         self.fusion3 = M.conv2d_block(
                     in_channels=2*self.encoder_list[2],
@@ -285,7 +285,7 @@ class BurstDeblurMP(nn.Module):
                     padding=0,
                     init_type=self.init_type,
                     activation=self.activation,
-                    use_batchnorm=self.bn
+                    norm_type=self.bn
                 )
         self.mid = MidConv(
                     in_channels=self.encoder_list[2],
@@ -293,7 +293,7 @@ class BurstDeblurMP(nn.Module):
                     layers=self.layers,
                     init_type=self.init_type,
                     activation=self.activation,
-                    use_batchnorm=self.bn
+                    norm_type=self.bn
                 )
         self.fusion4 = M.conv2d_block(
                     in_channels=2*self.decoder_list[0] + self.encoder_list[2],
@@ -303,7 +303,7 @@ class BurstDeblurMP(nn.Module):
                     padding=0,
                     init_type=self.init_type,
                     activation=self.activation,
-                    use_batchnorm=self.bn
+                    norm_type=self.bn
                 )
         self.upsample_conv1 = UpsampleConv(
                     in_channels=self.decoder_list[0],
@@ -311,7 +311,7 @@ class BurstDeblurMP(nn.Module):
                     layers=self.layers,
                     init_type=self.init_type,
                     activation=self.activation,
-                    use_batchnorm=self.bn
+                    norm_type=self.bn
                 )
         self.fusion5 = M.conv2d_block(
                     in_channels=2*self.decoder_list[1] + self.encoder_list[1],
@@ -321,7 +321,7 @@ class BurstDeblurMP(nn.Module):
                     padding=0,
                     init_type=self.init_type,
                     activation=self.activation,
-                    use_batchnorm=self.bn
+                    norm_type=self.bn
                 )
         self.upsample_conv2 = UpsampleConv(
                     in_channels=self.decoder_list[1],
@@ -329,7 +329,7 @@ class BurstDeblurMP(nn.Module):
                     layers=self.layers,
                     init_type=self.init_type,
                     activation=self.activation,
-                    use_batchnorm=self.bn
+                    norm_type=self.bn
                 )
         self.fusion6 = M.conv2d_block(
                     in_channels=2*self.decoder_list[2] + self.encoder_list[0],
@@ -339,7 +339,7 @@ class BurstDeblurMP(nn.Module):
                     padding=0,
                     init_type=self.init_type,
                     activation=self.activation,
-                    use_batchnorm=self.bn
+                    norm_type=self.bn
                 )
         self.output_conv1 = LayerConv(
                     in_channels=self.decoder_list[2],
@@ -347,7 +347,7 @@ class BurstDeblurMP(nn.Module):
                     layers=self.layers,
                     init_type=self.init_type,
                     activation=self.activation,
-                    use_batchnorm=self.bn
+                    norm_type=self.bn
                 )
         self.output_conv2 = LayerConv(
                     in_channels=self.decoder_list[3],
@@ -355,7 +355,7 @@ class BurstDeblurMP(nn.Module):
                     layers=1,
                     init_type=self.init_type,
                     activation=None,
-                    use_batchnorm=False
+                    norm_type='BN'
                 )
 
     def forward(self, x):
@@ -426,7 +426,7 @@ class BurstDeblurMP(nn.Module):
 
 
 def unit_test_burst_deblur_mp():
-    net = BurstDeblurMP(in_channels=3, layers=2, use_batchnorm=True)
+    net = BurstDeblurMP(in_channels=3, layers=2, norm_type='BN')
     print(net)
     inputs = torch.randn(4, 8, 3, 120, 80)
     if torch.cuda.is_available():

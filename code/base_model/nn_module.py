@@ -179,7 +179,7 @@ def conv2d_block(in_channels,
     elif norm_type == 'AdaptiveIN':
         block.append(AdaptiveInstanceNorm2d(out_channels))
     else:
-        raise ValueError
+        raise ValueError('invalid norm type:{}'.format(norm_type))
     if activation is not None:
         block.append(activation)
     return sequential_pack(block)
