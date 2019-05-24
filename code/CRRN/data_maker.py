@@ -51,7 +51,7 @@ def combine(image_a, image_b):
         else:
             y = random.uniform(0.3, 0.35)
     image_ret = cv2.addWeighted(image_a, x, image_b, y, 0)
-    return image_ret, image_a
+    return image_ret, cv2.addWeighted(image_a, x, image_b, y/3, 0)
 
 
 #############################################################################
