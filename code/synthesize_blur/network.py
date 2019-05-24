@@ -5,12 +5,14 @@ version 1: without any encapsulation
 '''
 import torch
 import torch.nn as nn
+import sys
+sys.path.append('../')
+from utils.log import time_log
 dtype = torch.cuda.FloatTensor
 dtype_long = torch.cuda.LongTensor
-import torchvision
-import os
 
 
+@time_log
 def bilinear_interpolate_torch(im, x, y):
     x0 = torch.floor(x).type(dtype_long)
     x1 = x0 + 1
@@ -35,12 +37,13 @@ def bilinear_interpolate_torch(im, x, y):
 
     return torch.t((torch.t(Ia) * wa)) + torch.t(torch.t(Ib) * wb) + torch.t(torch.t(Ic) * wc) + torch.t(torch.t(Id) * wd)
 
+
 class SythesizeBlur(nn.Module):
     def __init__(self):
         super(SythesizeBlur, self).__init__()
 
         self.LeakRate = 0.2
-        self.N = 17 # N evnely-spaced discrete samples
+        self.N = 17  # N evnely-spaced discrete samples
 
         '''encoder 1'''
         self.conv11 = nn.Conv2d(6, 32, kernel_size=3, stride=1, padding=1)
@@ -49,7 +52,7 @@ class SythesizeBlur(nn.Module):
         self.relu12 = nn.LeakyReLU(self.LeakRate)
         self.conv13 = nn.Conv2d(32, 32, kernel_size=3, stride=1, padding=1)
         self.relu13 = nn.LeakyReLU(self.LeakRate)
-        self.maxpool1 = nn.MaxPool2d(kernel_size=2,stride=2)
+        self.maxpool1 = nn.MaxPool2d(kernel_size=2, stride=2)
 
         '''encoder 2'''
         self.conv21 = nn.Conv2d(32, 64, kernel_size=3, stride=1, padding=1)
@@ -86,9 +89,9 @@ class SythesizeBlur(nn.Module):
         self.conv53 = nn.Conv2d(256, 256, kernel_size=3, stride=1, padding=1)
         self.relu53 = nn.LeakyReLU(self.LeakRate)
 
-
         '''decoder 1'''
-        self.up6 = nn.Upsample(scale_factor=2, mode='bilinear') # align_corners?
+        self.up6 = nn.Upsample(
+            scale_factor=2, mode='bilinear', align_corners=False)
         self.conv61 = nn.Conv2d(256, 256, kernel_size=3, stride=1, padding=1)
         self.relu61 = nn.LeakyReLU(self.LeakRate)
         # skip connect with relu43: Nx256xHxW
@@ -98,7 +101,7 @@ class SythesizeBlur(nn.Module):
         self.relu63 = nn.LeakyReLU(self.LeakRate)
 
         '''decoder 2'''
-        self.up7 = nn.Upsample(scale_factor=2, mode='bilinear')
+        self.up7 = nn.Upsample(scale_factor=2, mode='bilinear', align_corners=False)
         self.conv71 = nn.Conv2d(256, 128, kernel_size=3, stride=1, padding=1)
         self.relu71 = nn.LeakyReLU(self.LeakRate)
         # skip connect with relu33:Nx128xHxW
@@ -129,17 +132,21 @@ class SythesizeBlur(nn.Module):
         self.relu93 = nn.LeakyReLU(self.LeakRate)
 
         '''
-        outputs:  feeds into line prediction layer 
+        outputs:  feeds into line prediction layer
         '''
-        self.offset1 = nn.Conv2d(32, 2, kernel_size=1, stride=1, padding=0) # what about padding?
-        self.offset2 = nn.Conv2d(32, 2, kernel_size=1, stride=1, padding=0) # what about padding?
-        self.weight1 = nn.Conv2d(32, self.N, kernel_size=1, stride=1, padding=0) # padding?
-        self.weight2 = nn.Conv2d(32, self.N, kernel_size=1, stride=1, padding=0) # padding?
+        self.offset1 = nn.Conv2d(32, 2, kernel_size=1,
+                                 stride=1, padding=0)  # what about padding?
+        self.offset2 = nn.Conv2d(32, 2, kernel_size=1,
+                                 stride=1, padding=0)  # what about padding?
+        self.weight1 = nn.Conv2d(
+            32, self.N, kernel_size=1, stride=1, padding=0)  # padding?
+        self.weight2 = nn.Conv2d(
+            32, self.N, kernel_size=1, stride=1, padding=0)  # padding?
 
         # todo line prediction layer
 
-
-    def forward(self, inp1,inp2):
+    @time_log
+    def forward(self, inp1, inp2):
         '''
         input: NCHW, C:6, H:256, W:256
         output: synthesize image
@@ -148,42 +155,43 @@ class SythesizeBlur(nn.Module):
         self.shape = inp1.shape
         self.minibatch = inp1.shape[0]
 
-        x = torch.cat([inp1,inp2], dim=1)
-        x = self.relu11( self.conv11(x))
-        x = self.relu12( self.conv12(x))
-        relu13 = self.relu13( self.conv13(x))
+        x = torch.cat([inp1, inp2], dim=1)
+        x = self.relu11(self.conv11(x))
+        x = self.relu12(self.conv12(x))
+        relu13 = self.relu13(self.conv13(x))
         x = self.maxpool1(relu13)
 
-        x = self.relu21( self.conv21(x))
-        x = self.relu22( self.conv22(x))
-        relu23 = self.relu23( self.conv23(x))
+        x = self.relu21(self.conv21(x))
+        x = self.relu22(self.conv22(x))
+        relu23 = self.relu23(self.conv23(x))
         x = self.maxpool2(relu23)
 
-        x = self.relu31( self.conv31(x))
-        x = self.relu32( self.conv32(x))
-        relu33 = self.relu33( self.conv33(x))
+        x = self.relu31(self.conv31(x))
+        x = self.relu32(self.conv32(x))
+        relu33 = self.relu33(self.conv33(x))
         x = self.maxpool3(relu33)
 
-        x = self.relu41( self.conv41(x))
-        x = self.relu42( self.conv42(x))
-        relu43 = self.relu43( self.conv43(x))
+        x = self.relu41(self.conv41(x))
+        x = self.relu42(self.conv42(x))
+        relu43 = self.relu43(self.conv43(x))
         x = self.maxpool4(relu43)
 
-        x = self.relu51( self.conv51(x))
-        x = self.relu52( self.conv52(x))
-        x = self.relu53( self.conv53(x))
+        x = self.relu51(self.conv51(x))
+        x = self.relu52(self.conv52(x))
+        x = self.relu53(self.conv53(x))
 
         x = self.up6(x)
         x = self.relu61(self.conv61(x))
-        x = torch.cat([relu43, x], dim=1) # NCHW, 1--> Channel, for keras(NHWC), dim=3
-        x = self.relu62( self.conv62(x))
-        x = self.relu63( self.conv63(x))
+        # NCHW, 1--> Channel, for keras(NHWC), dim=3
+        x = torch.cat([relu43, x], dim=1)
+        x = self.relu62(self.conv62(x))
+        x = self.relu63(self.conv63(x))
 
         x = self.up7(x)
         x = self.relu71(self.conv71(x))
-        x = torch.cat([relu33, x], dim=1) # skip connect
-        x = self.relu72( self.conv72(x))
-        x = self.relu73( self.conv73(x))
+        x = torch.cat([relu33, x], dim=1)  # skip connect
+        x = self.relu72(self.conv72(x))
+        x = self.relu73(self.conv73(x))
 
         x = self.up8(x)
         x = self.relu81(self.conv81(x))
@@ -203,31 +211,42 @@ class SythesizeBlur(nn.Module):
         weight2 = self.weight2(x)   # Nx17xHxW
 
         # todo feed line prediction layer
-        sample = self.violent_cycle(offset1, offset2, weight1, weight2, inp1, inp2)
+        sample = self.violent_cycle(
+            offset1, offset2, weight1, weight2, inp1, inp2)
 
         return sample
 
+    @time_log
     def violent_cycle(self, _offset1, _offset2, _weight1, _weight2, _inp1, _inp2):
         '''
             Q1: 取完gird再加上offset?
         '''
-        theta = torch.tensor([[[1, 0, 0], [0, 1, 0]]], dtype=torch.float).repeat(self.minibatch, 1, 1)  # Nx2x3
+        theta = torch.tensor([[[1, 0, 0], [0, 1, 0]]], dtype=torch.float).repeat(
+            self.minibatch, 1, 1)  # Nx2x3
         grid = nn.functional.affine_grid(theta, self.shape)
 
         sample = torch.zeros_like(_inp1)
         for n in range(self.N):
-            grid1 = torch.clamp(grid + ( n / self.N) * (_offset1.permute(0, 2, 3, 1)), -1, 1) #Nx2xHxW --> NxHxWx2
+            # Nx2xHxW --> NxHxWx2
+            grid1 = torch.clamp(grid + (n / self.N) *
+                                (_offset1.permute(0, 2, 3, 1)), -1, 1)
             sample_n1 = nn.functional.grid_sample(_inp1, grid1)
             sample += (_weight1[:, n, :, :]).unsqueeze(1) * sample_n1
 
         for n in range(self.N):
-            grid2 = torch.clamp(grid + (n / self.N) * (_offset2.permute(0, 2, 3, 1)), -1, 1)
+            grid2 = torch.clamp(grid + (n / self.N) *
+                                (_offset2.permute(0, 2, 3, 1)), -1, 1)
             sample_n2 = nn.functional.grid_sample(_inp2, grid2)
             sample += (_weight2[:, n, :, :]).unsqueeze(1) * sample_n2
 
         return sample
 
 
-if __name__ == '__main__':
+def test_synthesize_blur():
     net = SythesizeBlur()
-    print(net)
+    inputs = torch.randn(4, 3, 256, 256)
+    out = net(inputs, inputs)
+
+
+if __name__ == '__main__':
+    test_synthesize_blur()
