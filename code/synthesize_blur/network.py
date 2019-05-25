@@ -15,10 +15,6 @@ dtype = torch.cuda.FloatTensor
 dtype_long = torch.cuda.LongTensor
 
 
-
-
-'''因为要使用pad_type = reflect，所以我copy过来改一下，实现顺序上稍有不同'''
-
 class LayerConv(nn.Module):
     def __init__(self, in_channels, out_channels, layers=3, init_type="xavier", activation=nn.ReLU(), norm_type=None):
         super(LayerConv, self).__init__()
@@ -32,7 +28,7 @@ class LayerConv(nn.Module):
                         kernel_size=3,
                         stride=1,
                         padding=1,
-	                    pad_type='reflect',
+                        pad_type='reflect',
                         init_type=init_type,
                         activation=activation,
                         norm_type=norm_type
@@ -46,7 +42,7 @@ class LayerConv(nn.Module):
                         kernel_size=3,
                         stride=1,
                         padding=1,
-	                    pad_type='reflect',
+                        pad_type='reflect',
                         init_type=init_type,
                         activation=activation,
                         norm_type=norm_type
@@ -71,7 +67,7 @@ class DownsampleConv(nn.Module):
                     kernel_size=4,
                     stride=2,
                     padding=1,
-	                pad_type='reflect',
+                    pad_type='reflect',
                     init_type=init_type,
                     activation=activation,
                     norm_type=norm_type
@@ -88,7 +84,7 @@ class DownsampleConv(nn.Module):
                         kernel_size=3,
                         stride=1,
                         padding=1,
-	                    pad_type='reflect',
+                        pad_type='reflect',
                         init_type=init_type,
                         activation=activation,
                         norm_type=norm_type
@@ -102,7 +98,7 @@ class DownsampleConv(nn.Module):
                         kernel_size=3,
                         stride=1,
                         padding=1,
-	                    pad_type='reflect',
+                        pad_type='reflect',
                         init_type=init_type,
                         activation=activation,
                         norm_type=norm_type
@@ -128,7 +124,7 @@ class MidConv(nn.Module):
                     kernel_size=4,
                     stride=2,
                     padding=1,
-	                pad_type = 'reflect',
+                    pad_type = 'reflect',
                     init_type=init_type,
                     activation=activation,
                     norm_type=norm_type
@@ -145,7 +141,7 @@ class MidConv(nn.Module):
                         kernel_size=3,
                         stride=1,
                         padding=1,
-	                    pad_type = 'reflect',
+                        pad_type = 'reflect',
                         init_type=init_type,
                         activation=activation,
                         norm_type=norm_type
@@ -159,7 +155,7 @@ class MidConv(nn.Module):
                         kernel_size=3,
                         stride=1,
                         padding=1,
-	                    pad_type='reflect',
+                        pad_type='reflect',
                         init_type=init_type,
                         activation=activation,
                         norm_type=norm_type
@@ -176,7 +172,7 @@ class MidConv(nn.Module):
                     kernel_size=4,
                     stride=2,
                     padding=1,
-	                pad_type='reflect',
+                    pad_type='reflect',
                     init_type=init_type,
                     activation=activation,
                     norm_type=norm_type
@@ -205,7 +201,7 @@ class UpsampleConv(nn.Module):
                         kernel_size=3,
                         stride=1,
                         padding=1,
-	                    pad_type='reflect',
+                        pad_type='reflect',
                         init_type=init_type,
                         activation=activation,
                         norm_type=norm_type
@@ -219,7 +215,7 @@ class UpsampleConv(nn.Module):
                         kernel_size=3,
                         stride=1,
                         padding=1,
-	                    pad_type='reflect',
+                        pad_type='reflect',
                         init_type=init_type,
                         activation=activation,
                         norm_type=norm_type
@@ -235,7 +231,7 @@ class UpsampleConv(nn.Module):
                     kernel_size=4,
                     stride=2,
                     padding=1,
-	                pad_type='reflect',
+                    pad_type='reflect',
                     init_type=init_type,
                     activation=activation,
                     norm_type=norm_type
@@ -296,14 +292,14 @@ class SythesizeBlur(nn.Module):
         '''
 
         self.downsample1 = DownsampleConv(
-			in_channels = self.encoder_list[0],
-			out_channels = self.encoder_list[1],
-			layers = self.layers,
-			downsample_type = "maxpool",
-			init_type = self.init_type,
-			activation = self.activation,
-			norm_type = self.norm_type
-		)
+                in_channels = self.encoder_list[0],
+                out_channels = self.encoder_list[1],
+                layers = self.layers,
+                downsample_type = "maxpool",
+                init_type = self.init_type,
+                activation = self.activation,
+                norm_type = self.norm_type
+            )
         '''encoder 3
         self.conv31 = nn.Conv2d(64, 128, kernel_size=3, stride=1, padding=1)
         self.relu31 = nn.LeakyReLU(self.LeakRate)
@@ -314,15 +310,15 @@ class SythesizeBlur(nn.Module):
         self.maxpool3 = nn.MaxPool2d(kernel_size=2, stride=2)
         '''
         self.downsample2 = DownsampleConv(
-	        in_channels=self.encoder_list[1],
-	        out_channels=self.encoder_list[2],
-	        layers=self.layers,
-	        downsample_type="maxpool",
-	        init_type=self.init_type,
-	        activation=self.activation,
-	        norm_type=self.norm_type
+                in_channels=self.encoder_list[1],
+                out_channels=self.encoder_list[2],
+                layers=self.layers,
+                downsample_type="maxpool",
+                init_type=self.init_type,
+                activation=self.activation,
+                norm_type=self.norm_type
         )
-     
+
         '''encoder 4
         self.conv41 = nn.Conv2d(128, 256, kernel_size=3, stride=1, padding=1)
         self.relu41 = nn.LeakyReLU(self.LeakRate)
@@ -333,13 +329,13 @@ class SythesizeBlur(nn.Module):
         self.maxpool4 = nn.MaxPool2d(kernel_size=2, stride=2)
         '''
         self.downsample3 = DownsampleConv(
-	        in_channels=self.encoder_list[2],
-	        out_channels=self.encoder_list[3],
-	        layers=self.layers,
-	        downsample_type="maxpool",
-	        init_type=self.init_type,
-	        activation=self.activation,
-	        norm_type=self.norm_type
+                in_channels=self.encoder_list[2],
+                out_channels=self.encoder_list[3],
+                layers=self.layers,
+                downsample_type="maxpool",
+                init_type=self.init_type,
+                activation=self.activation,
+                norm_type=self.norm_type
         )
         #self.down_sample4 = nn.MaxPool2d(kernel_size=2, stride=2)
 
@@ -353,8 +349,8 @@ class SythesizeBlur(nn.Module):
         self.relu53 = nn.LeakyReLU(self.LeakRate)
         '''
         self.mid = MidConv(
-	        in_channels=self.encoder_list[3],
-	        out_channels=self.decoder_list[0],
+            in_channels=self.encoder_list[3],
+            out_channels=self.decoder_list[0],
             layers=self.layers,
             downsample_type='maxpool',
             upsample_type='bilinear',
@@ -362,14 +358,14 @@ class SythesizeBlur(nn.Module):
             activation=self.activation,
             norm_type=self.norm_type)
         self.bottom1 = M.conv2d_block(
-	        in_channels = self.decoder_list[0],
-	        out_channels = self.decoder_list[0],
+            in_channels = self.decoder_list[0],
+            out_channels = self.decoder_list[0],
             kernel_size = 3,
             stride = 1,
             padding =1,
             pad_type = 'reflect',
             init_type = self.init_type,
-	        activation=self.activation,
+            activation=self.activation,
             norm_type = self.norm_type
         )
 
@@ -387,24 +383,24 @@ class SythesizeBlur(nn.Module):
         # mid:256 Upsample --> conv(256 channel) x3 --> Upsample
         '''
         self.upsample_conv1 = UpsampleConv(
-	        in_channels = self.decoder_list[0]+self.encoder_list[3],
-	        out_channels = self.decoder_list[0],
-	        layers = 2,
-	        upsample_type = 'bilinear',
-	        init_type = self.init_type,
-	        activation = self.activation,
-	        norm_type = self.norm_type
+                in_channels = self.decoder_list[0]+self.encoder_list[3],
+                out_channels = self.decoder_list[0],
+                layers = 2,
+                upsample_type = 'bilinear',
+                init_type = self.init_type,
+                activation = self.activation,
+                norm_type = self.norm_type
         )
         self.bottom2 = M.conv2d_block(
-	        in_channels=self.decoder_list[0],
-	        out_channels=self.decoder_list[1],
-	        kernel_size=3,
-	        stride=1,
-	        padding=1,
-	        pad_type='reflect',
-	        init_type=self.init_type,
-	        activation=self.activation,
-	        norm_type=self.norm_type
+                in_channels=self.decoder_list[0],
+                out_channels=self.decoder_list[1],
+                kernel_size=3,
+                stride=1,
+                padding=1,
+                pad_type='reflect',
+                init_type=self.init_type,
+                activation=self.activation,
+                norm_type=self.norm_type
         )
 
         '''decoder 2
@@ -418,25 +414,25 @@ class SythesizeBlur(nn.Module):
         self.relu73 = nn.LeakyReLU(self.LeakRate)
         '''
         self.upsample_conv2 = UpsampleConv(
-	        in_channels=self.decoder_list[1] + self.encoder_list[2],
-	        out_channels=self.decoder_list[1],
-	        layers=self.layers,
-	        upsample_type = 'bilinear',
+            in_channels=self.decoder_list[1] + self.encoder_list[2],
+            out_channels=self.decoder_list[1],
+            layers=self.layers,
+            upsample_type = 'bilinear',
             init_type = self.init_type,
             activation = self.activation,
             norm_type = self.norm_type
 
         )
         self.bottom3 = M.conv2d_block(
-	        in_channels=self.decoder_list[1],
-	        out_channels=self.decoder_list[2],
-	        kernel_size=3,
-	        stride=1,
-	        padding=1,
-	        pad_type='reflect',
-	        init_type=self.init_type,
-	        activation=self.activation,
-	        norm_type=self.norm_type
+            in_channels=self.decoder_list[1],
+            out_channels=self.decoder_list[2],
+            kernel_size=3,
+            stride=1,
+            padding=1,
+            pad_type='reflect',
+            init_type=self.init_type,
+            activation=self.activation,
+            norm_type=self.norm_type
         )
         '''decoder 3
         self.up8 = nn.Upsample(scale_factor=2, mode='bilinear')
@@ -449,24 +445,24 @@ class SythesizeBlur(nn.Module):
         self.relu83 = nn.LeakyReLU(self.LeakRate)
         '''
         self.upsample_conv3 = UpsampleConv(
-	        in_channels=self.decoder_list[2] + self.encoder_list[1],
-	        out_channels=self.decoder_list[2],
-	        layers=self.layers,
-	        upsample_type='bilinear',
-	        init_type=self.init_type,
-	        activation=self.activation,
-	        norm_type=self.norm_type
+            in_channels=self.decoder_list[2] + self.encoder_list[1],
+            out_channels=self.decoder_list[2],
+            layers=self.layers,
+            upsample_type='bilinear',
+            init_type=self.init_type,
+            activation=self.activation,
+            norm_type=self.norm_type
         )
         self.bottom4 = M.conv2d_block(
-	        in_channels=self.decoder_list[2],
-	        out_channels=self.decoder_list[3],
-	        kernel_size=3,
-	        stride=1,
-	        padding=1,
-	        pad_type='reflect',
-	        init_type=self.init_type,
-	        activation=self.activation,
-	        norm_type=self.norm_type
+            in_channels=self.decoder_list[2],
+            out_channels=self.decoder_list[3],
+            kernel_size=3,
+            stride=1,
+            padding=1,
+            pad_type='reflect',
+            init_type=self.init_type,
+            activation=self.activation,
+            norm_type=self.norm_type
         )
 
         '''decoder 4
@@ -480,12 +476,12 @@ class SythesizeBlur(nn.Module):
         self.relu93 = nn.LeakyReLU(self.LeakRate)
         '''
         self.output_conv = LayerConv(
-	        in_channels = self.decoder_list[3] + self.encoder_list[0],
-	        out_channels = self.decoder_list[3],
-	        layers = self.layers,
-	        init_type = 'xavier',
-	        activation = self.activation,
-	        norm_type = self.norm_type
+                in_channels = self.decoder_list[3] + self.encoder_list[0],
+                out_channels = self.decoder_list[3],
+                layers = self.layers,
+                init_type = 'xavier',
+                activation = self.activation,
+                norm_type = self.norm_type
         )
 
         '''
