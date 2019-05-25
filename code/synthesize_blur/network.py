@@ -8,9 +8,15 @@ import torch.nn as nn
 import torch.nn.functional as F
 import sys
 sys.path.append('../')
+import base_model.nn_module as M
+from burst_deblur.network.burst_deblur_network import LayerConv, DownsampleConv, MidConv
 from utils.log import time_log
 dtype = torch.cuda.FloatTensor
 dtype_long = torch.cuda.LongTensor
+
+
+
+
 
 
 @time_log
@@ -40,14 +46,20 @@ def bilinear_interpolate_torch(im, x, y):
 
 
 class SythesizeBlur(nn.Module):
-    def __init__(self):
+    encoder_list = [32, 64, 128, 256]
+    decoder_list = [256, 128, 64, 32]
+
+
+    def __init__(self, in_channels = 6, layers = 3, init_type = 'xavier', norm_type=None):
         super(SythesizeBlur, self).__init__()
         if torch.cuda.is_available():
             self.device = 'cuda'
         else:
             self.device = 'cpu'
-
+        self.init_type = init_type
+        self.norm_type = norm_type
         self.LeakRate = 0.2
+        self.activation = nn.LeackyReLU(self.LeakRate)
         self.N = 17  # N evnely-spaced discrete samples
 
         '''encoder 1'''
@@ -59,6 +71,15 @@ class SythesizeBlur(nn.Module):
         self.relu13 = nn.LeakyReLU(self.LeakRate)
         self.maxpool1 = nn.MaxPool2d(kernel_size=2, stride=2)
 
+        # 
+        self.conv1 = LayerConv(
+                in_channels = in_channels,
+                out_channels = self.encoder_list[0],
+                layers = self.layers,
+                activation = self.activation,
+                norm_type = self.norm_type)
+        self.down_sample1 = nn.MaxPool2d(kernel_size=2, stride=2)
+
         '''encoder 2'''
         self.conv21 = nn.Conv2d(32, 64, kernel_size=3, stride=1, padding=1)
         self.relu21 = nn.LeakyReLU(self.LeakRate)
@@ -67,6 +88,14 @@ class SythesizeBlur(nn.Module):
         self.conv23 = nn.Conv2d(64, 64, kernel_size=3, stride=1, padding=1)
         self.relu23 = nn.LeakyReLU(self.LeakRate)
         self.maxpool2 = nn.MaxPool2d(kernel_size=2, stride=2)
+        #
+        self.conv2 = LayerConv(
+                in_channels = ,self.encoder_list[0]
+                out_channels = self.encoder_list[1],
+                layers = self.layers,
+                activation = self.activation,
+                norm_type = self.norm_type)
+        self.down_sample2 = nn.MaxPool2d(kernel_size=2, stride=2)
 
         '''encoder 3'''
         self.conv31 = nn.Conv2d(64, 128, kernel_size=3, stride=1, padding=1)
@@ -76,7 +105,15 @@ class SythesizeBlur(nn.Module):
         self.conv33 = nn.Conv2d(128, 128, kernel_size=3, stride=1, padding=1)
         self.relu33 = nn.LeakyReLU(self.LeakRate)
         self.maxpool3 = nn.MaxPool2d(kernel_size=2, stride=2)
-
+        # 
+        self.conv3 = LayerConv(
+                in_channels = ,self.encoder_list[1]
+                out_channels = self.encoder_list[2],
+                layers = self.layers,
+                activation = self.activation,
+                norm_type = self.norm_type)
+        self.down_sample3 = nn.MaxPool2d(kernel_size=2, stride=2)
+     
         '''encoder 4'''
         self.conv41 = nn.Conv2d(128, 256, kernel_size=3, stride=1, padding=1)
         self.relu41 = nn.LeakyReLU(self.LeakRate)
@@ -85,18 +122,36 @@ class SythesizeBlur(nn.Module):
         self.conv43 = nn.Conv2d(256, 256, kernel_size=3, stride=1, padding=1)
         self.relu43 = nn.LeakyReLU(self.LeakRate)
         self.maxpool4 = nn.MaxPool2d(kernel_size=2, stride=2)
+        # 
+        self.conv4 = LayerConv(
+                in_channels = ,self.encoder_list[2]
+                out_channels = self.encoder_list[3],
+                layers = self.layers,
+                activation = self.activation,
+                norm_type = self.norm_type)
+        #self.down_sample4 = nn.MaxPool2d(kernel_size=2, stride=2)
 
-        '''encoder 5'''
+
+        '''encoder 5 / mid'''
         self.conv51 = nn.Conv2d(256, 256, kernel_size=3, stride=1, padding=1)
         self.relu51 = nn.LeakyReLU(self.LeakRate)
         self.conv52 = nn.Conv2d(256, 256, kernel_size=3, stride=1, padding=1)
         self.relu52 = nn.LeakyReLU(self.LeakRate)
         self.conv53 = nn.Conv2d(256, 256, kernel_size=3, stride=1, padding=1)
         self.relu53 = nn.LeakyReLU(self.LeakRate)
+        #
+        self.mid = MidConv(
+               in_channels = self.encoder_list[3],
+               out_channels = self.decoder_list[0],
+              layers = self.layers,
+              down_sample_type = 'maxpool',
+              upsample_type = 'bilinear',
+              init_type = 'xavier',
+              activation = self.activation,
+              norm_type = self.norm_type)
 
         '''decoder 1'''
-        self.up6 = nn.Upsample(
-            scale_factor=2, mode='bilinear', align_corners=False)
+        self.up6 = nn.Upsample(scale_factor=2, mode='bilinear', align_corners=False)
         self.conv61 = nn.Conv2d(256, 256, kernel_size=3, stride=1, padding=1)
         self.relu61 = nn.LeakyReLU(self.LeakRate)
         # skip connect with relu43: Nx256xHxW
@@ -104,6 +159,9 @@ class SythesizeBlur(nn.Module):
         self.relu62 = nn.LeakyReLU(self.LeakRate)
         self.conv63 = nn.Conv2d(256, 256, kernel_size=3, stride=1, padding=1)
         self.relu63 = nn.LeakyReLU(self.LeakRate)
+
+        # 
+        self.upsample_conv1 = Upsample()
 
         '''decoder 2'''
         self.up7 = nn.Upsample(scale_factor=2, mode='bilinear', align_corners=False)
