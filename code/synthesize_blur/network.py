@@ -1,4 +1,6 @@
 # -*- coding:utf-8 -*-
+from utils.log import time_log
+import base_model.nn_module as M
 '''
 version 1: without any encapsulation
 @butub
@@ -8,9 +10,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 import sys
 sys.path.append('../')
-import base_model.nn_module as M
 #from burst_deblur.network.burst_deblur_network import LayerConv, DownsampleConv, MidConv, UpsampleConv
-from utils.log import time_log
 dtype = torch.cuda.FloatTensor
 dtype_long = torch.cuda.LongTensor
 
@@ -32,8 +32,8 @@ class LayerConv(nn.Module):
                         init_type=init_type,
                         activation=activation,
                         norm_type=norm_type
-                        )
                     )
+                )
             else:
                 convs.append(
                     M.conv2d_block(
@@ -46,8 +46,8 @@ class LayerConv(nn.Module):
                         init_type=init_type,
                         activation=activation,
                         norm_type=norm_type
-                        )
                     )
+                )
         self.main = nn.Sequential(*convs)
 
     def forward(self, x):
@@ -62,18 +62,19 @@ class DownsampleConv(nn.Module):
             self.downsample = nn.MaxPool2d(kernel_size=2)
         elif downsample_type == "conv_stride2":
             self.downsample = M.conv2d_block(
-                    in_channels=in_channels,
-                    out_channels=in_channels,
-                    kernel_size=4,
-                    stride=2,
-                    padding=1,
-                    pad_type='reflect',
-                    init_type=init_type,
-                    activation=activation,
-                    norm_type=norm_type
-                    )
+                in_channels=in_channels,
+                out_channels=in_channels,
+                kernel_size=4,
+                stride=2,
+                padding=1,
+                pad_type='reflect',
+                init_type=init_type,
+                activation=activation,
+                norm_type=norm_type
+            )
         else:
-            raise ValueError("invalid downsample type: {}".format(downsample_type))
+            raise ValueError(
+                "invalid downsample type: {}".format(downsample_type))
         convs = []
         for i in range(layers):
             if i == 0:
@@ -88,8 +89,8 @@ class DownsampleConv(nn.Module):
                         init_type=init_type,
                         activation=activation,
                         norm_type=norm_type
-                        )
                     )
+                )
             else:
                 convs.append(
                     M.conv2d_block(
@@ -102,14 +103,15 @@ class DownsampleConv(nn.Module):
                         init_type=init_type,
                         activation=activation,
                         norm_type=norm_type
-                        )
                     )
+                )
         self.main = nn.Sequential(*convs)
 
     def forward(self, x):
         x = self.downsample(x)
         x = self.main(x)
         return x
+
 
 class MidConv(nn.Module):
     def __init__(self, in_channels, out_channels, layers, downsample_type="maxpool",
@@ -119,18 +121,19 @@ class MidConv(nn.Module):
             self.downsample = nn.MaxPool2d(kernel_size=2)
         elif downsample_type == "conv_stride2":
             self.downsample = M.conv2d_block(
-                    in_channels=in_channels,
-                    out_channels=in_channels,
-                    kernel_size=4,
-                    stride=2,
-                    padding=1,
-                    pad_type = 'reflect',
-                    init_type=init_type,
-                    activation=activation,
-                    norm_type=norm_type
-                    )
+                in_channels=in_channels,
+                out_channels=in_channels,
+                kernel_size=4,
+                stride=2,
+                padding=1,
+                pad_type='reflect',
+                init_type=init_type,
+                activation=activation,
+                norm_type=norm_type
+            )
         else:
-            raise ValueError("invalid downsample type: {}".format(downsample_type))
+            raise ValueError(
+                "invalid downsample type: {}".format(downsample_type))
         convs = []
         for i in range(layers):
             if i == 0:
@@ -141,12 +144,12 @@ class MidConv(nn.Module):
                         kernel_size=3,
                         stride=1,
                         padding=1,
-                        pad_type = 'reflect',
+                        pad_type='reflect',
                         init_type=init_type,
                         activation=activation,
                         norm_type=norm_type
-                        )
                     )
+                )
             else:
                 convs.append(
                     M.conv2d_block(
@@ -159,24 +162,25 @@ class MidConv(nn.Module):
                         init_type=init_type,
                         activation=activation,
                         norm_type=norm_type
-                        )
                     )
+                )
         self.main = nn.Sequential(*convs)
 
         if upsample_type == "bilinear":
-            self.upsample = nn.Upsample(scale_factor=2, mode='bilinear', align_corners=False)
+            self.upsample = nn.Upsample(
+                scale_factor=2, mode='bilinear', align_corners=False)
         elif upsample_type == "conv_transpose_stride2":
             self.upsample = M.deconv2d_block(
-                    in_channels=out_channels,
-                    out_channels=out_channels,
-                    kernel_size=4,
-                    stride=2,
-                    padding=1,
-                    pad_type='reflect',
-                    init_type=init_type,
-                    activation=activation,
-                    norm_type=norm_type
-                    )
+                in_channels=out_channels,
+                out_channels=out_channels,
+                kernel_size=4,
+                stride=2,
+                padding=1,
+                pad_type='reflect',
+                init_type=init_type,
+                activation=activation,
+                norm_type=norm_type
+            )
         else:
             raise ValueError("invalid upsample type: {}".format(upsample_type))
 
@@ -187,9 +191,8 @@ class MidConv(nn.Module):
         return x
 
 
-
 class UpsampleConv(nn.Module):
-    def __init__(self, in_channels, out_channels, layers = 2, upsample_type="bilinear", init_type="xavier", activation=nn.ReLU(), norm_type='bn'):
+    def __init__(self, in_channels, out_channels, layers=2, upsample_type="bilinear", init_type="xavier", activation=nn.ReLU(), norm_type='bn'):
         super(UpsampleConv, self).__init__()
         convs = []
         for i in range(layers):
@@ -205,8 +208,8 @@ class UpsampleConv(nn.Module):
                         init_type=init_type,
                         activation=activation,
                         norm_type=norm_type
-                        )
                     )
+                )
             else:
                 convs.append(
                     M.conv2d_block(
@@ -219,23 +222,24 @@ class UpsampleConv(nn.Module):
                         init_type=init_type,
                         activation=activation,
                         norm_type=norm_type
-                        )
                     )
+                )
         self.main = nn.Sequential(*convs)
         if upsample_type == "bilinear":
-            self.upsample = nn.Upsample(scale_factor=2, mode='bilinear', align_corners=False)
+            self.upsample = nn.Upsample(
+                scale_factor=2, mode='bilinear', align_corners=False)
         elif upsample_type == "conv_transpose_stride2":
             self.upsample = M.deconv2d_block(
-                    in_channels=out_channels,
-                    out_channels=out_channels,
-                    kernel_size=4,
-                    stride=2,
-                    padding=1,
-                    pad_type='reflect',
-                    init_type=init_type,
-                    activation=activation,
-                    norm_type=norm_type
-                    )
+                in_channels=out_channels,
+                out_channels=out_channels,
+                kernel_size=4,
+                stride=2,
+                padding=1,
+                pad_type='reflect',
+                init_type=init_type,
+                activation=activation,
+                norm_type=norm_type
+            )
         else:
             raise ValueError("invalid upsample type: {}".format(upsample_type))
 
@@ -245,13 +249,11 @@ class UpsampleConv(nn.Module):
         return x
 
 
-
 class SythesizeBlur(nn.Module):
     encoder_list = [32, 64, 128, 256]
     decoder_list = [256, 128, 64, 32]
 
-
-    def __init__(self, in_channels = 6, layers = 3, init_type = 'xavier', norm_type=None):
+    def __init__(self, in_channels=6, layers=3, init_type='xavier', norm_type=None):
         super(SythesizeBlur, self).__init__()
         if torch.cuda.is_available():
             self.device = 'cuda'
@@ -273,13 +275,13 @@ class SythesizeBlur(nn.Module):
         self.relu13 = nn.LeakyReLU(self.LeakRate)
         self.maxpool1 = nn.MaxPool2d(kernel_size=2, stride=2)
         '''
-        # 
+        #
         self.input_conv = LayerConv(
-                in_channels = in_channels,
-                out_channels = self.encoder_list[0],
-                layers = self.layers,
-                activation = self.activation,
-                norm_type = self.norm_type)
+            in_channels=in_channels,
+            out_channels=self.encoder_list[0],
+            layers=self.layers,
+            activation=self.activation,
+            norm_type=self.norm_type)
 
         '''encoder 2
         self.conv21 = nn.Conv2d(32, 64, kernel_size=3, stride=1, padding=1)
@@ -292,14 +294,14 @@ class SythesizeBlur(nn.Module):
         '''
 
         self.downsample1 = DownsampleConv(
-                in_channels = self.encoder_list[0],
-                out_channels = self.encoder_list[1],
-                layers = self.layers,
-                downsample_type = "maxpool",
-                init_type = self.init_type,
-                activation = self.activation,
-                norm_type = self.norm_type
-            )
+            in_channels=self.encoder_list[0],
+            out_channels=self.encoder_list[1],
+            layers=self.layers,
+            downsample_type="maxpool",
+            init_type=self.init_type,
+            activation=self.activation,
+            norm_type=self.norm_type
+        )
         '''encoder 3
         self.conv31 = nn.Conv2d(64, 128, kernel_size=3, stride=1, padding=1)
         self.relu31 = nn.LeakyReLU(self.LeakRate)
@@ -310,13 +312,13 @@ class SythesizeBlur(nn.Module):
         self.maxpool3 = nn.MaxPool2d(kernel_size=2, stride=2)
         '''
         self.downsample2 = DownsampleConv(
-                in_channels=self.encoder_list[1],
-                out_channels=self.encoder_list[2],
-                layers=self.layers,
-                downsample_type="maxpool",
-                init_type=self.init_type,
-                activation=self.activation,
-                norm_type=self.norm_type
+            in_channels=self.encoder_list[1],
+            out_channels=self.encoder_list[2],
+            layers=self.layers,
+            downsample_type="maxpool",
+            init_type=self.init_type,
+            activation=self.activation,
+            norm_type=self.norm_type
         )
 
         '''encoder 4
@@ -329,16 +331,15 @@ class SythesizeBlur(nn.Module):
         self.maxpool4 = nn.MaxPool2d(kernel_size=2, stride=2)
         '''
         self.downsample3 = DownsampleConv(
-                in_channels=self.encoder_list[2],
-                out_channels=self.encoder_list[3],
-                layers=self.layers,
-                downsample_type="maxpool",
-                init_type=self.init_type,
-                activation=self.activation,
-                norm_type=self.norm_type
+            in_channels=self.encoder_list[2],
+            out_channels=self.encoder_list[3],
+            layers=self.layers,
+            downsample_type="maxpool",
+            init_type=self.init_type,
+            activation=self.activation,
+            norm_type=self.norm_type
         )
         #self.down_sample4 = nn.MaxPool2d(kernel_size=2, stride=2)
-
 
         '''encoder 5 / mid
         self.conv51 = nn.Conv2d(256, 256, kernel_size=3, stride=1, padding=1)
@@ -358,15 +359,15 @@ class SythesizeBlur(nn.Module):
             activation=self.activation,
             norm_type=self.norm_type)
         self.bottom1 = M.conv2d_block(
-            in_channels = self.decoder_list[0],
-            out_channels = self.decoder_list[0],
-            kernel_size = 3,
-            stride = 1,
-            padding =1,
-            pad_type = 'reflect',
-            init_type = self.init_type,
+            in_channels=self.decoder_list[0],
+            out_channels=self.decoder_list[0],
+            kernel_size=3,
+            stride=1,
+            padding=1,
+            pad_type='reflect',
+            init_type=self.init_type,
             activation=self.activation,
-            norm_type = self.norm_type
+            norm_type=self.norm_type
         )
 
         '''decoder 1
@@ -383,24 +384,24 @@ class SythesizeBlur(nn.Module):
         # mid:256 Upsample --> conv(256 channel) x3 --> Upsample
         '''
         self.upsample_conv1 = UpsampleConv(
-                in_channels = self.decoder_list[0]+self.encoder_list[3],
-                out_channels = self.decoder_list[0],
-                layers = 2,
-                upsample_type = 'bilinear',
-                init_type = self.init_type,
-                activation = self.activation,
-                norm_type = self.norm_type
+            in_channels=self.decoder_list[0]+self.encoder_list[3],
+            out_channels=self.decoder_list[0],
+            layers=2,
+            upsample_type='bilinear',
+            init_type=self.init_type,
+            activation=self.activation,
+            norm_type=self.norm_type
         )
         self.bottom2 = M.conv2d_block(
-                in_channels=self.decoder_list[0],
-                out_channels=self.decoder_list[1],
-                kernel_size=3,
-                stride=1,
-                padding=1,
-                pad_type='reflect',
-                init_type=self.init_type,
-                activation=self.activation,
-                norm_type=self.norm_type
+            in_channels=self.decoder_list[0],
+            out_channels=self.decoder_list[1],
+            kernel_size=3,
+            stride=1,
+            padding=1,
+            pad_type='reflect',
+            init_type=self.init_type,
+            activation=self.activation,
+            norm_type=self.norm_type
         )
 
         '''decoder 2
@@ -417,10 +418,10 @@ class SythesizeBlur(nn.Module):
             in_channels=self.decoder_list[1] + self.encoder_list[2],
             out_channels=self.decoder_list[1],
             layers=self.layers,
-            upsample_type = 'bilinear',
-            init_type = self.init_type,
-            activation = self.activation,
-            norm_type = self.norm_type
+            upsample_type='bilinear',
+            init_type=self.init_type,
+            activation=self.activation,
+            norm_type=self.norm_type
 
         )
         self.bottom3 = M.conv2d_block(
@@ -476,12 +477,12 @@ class SythesizeBlur(nn.Module):
         self.relu93 = nn.LeakyReLU(self.LeakRate)
         '''
         self.output_conv = LayerConv(
-                in_channels = self.decoder_list[3] + self.encoder_list[0],
-                out_channels = self.decoder_list[3],
-                layers = self.layers,
-                init_type = 'xavier',
-                activation = self.activation,
-                norm_type = self.norm_type
+            in_channels=self.decoder_list[3] + self.encoder_list[0],
+            out_channels=self.decoder_list[3],
+            layers=self.layers,
+            init_type='xavier',
+            activation=self.activation,
+            norm_type=self.norm_type
         )
 
         '''
@@ -609,14 +610,16 @@ class SythesizeBlur(nn.Module):
             grid1 = torch.clamp(grid + (n / self.N) *
                                 (_offset1.permute(0, 2, 3, 1)), -1, 1)
             grid1.div_(norm_factor)
-            sample_n1 = nn.functional.grid_sample(_inp1, grid1, padding_mode='border')
+            sample_n1 = nn.functional.grid_sample(
+                _inp1, grid1, padding_mode='border')
             sample += (_weight1[:, n, :, :]).unsqueeze(1) * sample_n1
 
         for n in range(self.N):
             grid2 = torch.clamp(grid + (n / self.N) *
                                 (_offset2.permute(0, 2, 3, 1)), -1, 1)
             grid2.div_(norm_factor)
-            sample_n2 = nn.functional.grid_sample(_inp2, grid2, padding_mode='border')
+            sample_n2 = nn.functional.grid_sample(
+                _inp2, grid2, padding_mode='border')
             sample += (_weight2[:, n, :, :]).unsqueeze(1) * sample_n2
 
         return sample
@@ -626,13 +629,17 @@ class SythesizeBlur(nn.Module):
         N = self.N
         B, C, H, W = img1.shape
         norm_factor = torch.FloatTensor([H/2, W/2]).to(self.device)
-        theta = torch.FloatTensor([1, 0, 0, 0, 1, 0]).view(1, 2, 3).repeat(B, 1, 1).to(self.device)
+        theta = torch.FloatTensor([1, 0, 0, 0, 1, 0]).view(
+            1, 2, 3).repeat(B, 1, 1).to(self.device)
         grid = F.affine_grid(theta, self.shape)
         grid.mul_(norm_factor).unsqueeze_(0)
 
-        offset1_sample = offset1.permute(0, 2, 3, 1).contiguous().unsqueeze(0).repeat(N, 1, 1, 1, 1)
-        offset2_sample = offset2.permute(0, 2, 3, 1).contiguous().unsqueeze(0).repeat(N, 1, 1, 1, 1)
-        sample_factor = torch.FloatTensor([x for x in range(N)]).view(N, 1, 1, 1, 1).to(self.device)
+        offset1_sample = offset1.permute(
+            0, 2, 3, 1).contiguous().unsqueeze(0).repeat(N, 1, 1, 1, 1)
+        offset2_sample = offset2.permute(
+            0, 2, 3, 1).contiguous().unsqueeze(0).repeat(N, 1, 1, 1, 1)
+        sample_factor = torch.FloatTensor(
+            [x for x in range(N)]).view(N, 1, 1, 1, 1).to(self.device)
 
         offset1_sample.mul_(sample_factor).add_(grid).div_(norm_factor)
         offset2_sample.mul_(sample_factor).add_(grid).div_(norm_factor)
@@ -640,8 +647,10 @@ class SythesizeBlur(nn.Module):
         sample1 = []
         sample2 = []
         for n in range(N):
-            sample1.append(F.grid_sample(img1, offset1_sample[n], padding_mode='border'))
-            sample2.append(F.grid_sample(img2, offset2_sample[n], padding_mode='border'))
+            sample1.append(F.grid_sample(
+                img1, offset1_sample[n], padding_mode='border'))
+            sample2.append(F.grid_sample(
+                img2, offset2_sample[n], padding_mode='border'))
 
         sample1 = torch.stack(sample1, dim=1)
         sample2 = torch.stack(sample2, dim=1)
