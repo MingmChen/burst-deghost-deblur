@@ -2,13 +2,12 @@
 
 import torch
 from torch.utils.data import DataLoader
-from network import SythesizeBlur
+from network import SynthesizeBlur
 from dataset import BlurDataset
 import torch.optim as optim
 
 def main():
-    print("in")
-    net = SythesizeBlur()
+    net = SynthesizeBlur()
     blur_dataset = BlurDataset()
     dataloader = DataLoader(blur_dataset, batch_size= 16)
 

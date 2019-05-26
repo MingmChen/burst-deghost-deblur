@@ -10,15 +10,16 @@
 
 
 import os
+import sys
 import argparse
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from torch.utils.data import DataLoader
 from torchvision import transforms
-from dataset import SvhnDataset
-from model import Model
-from bigmodel import BigModel
+sys.path.append('../')
+from dataset import BlurDataset
+from network import SynthesizeBlur
 
 
 class SoftCrossEntropy(nn.Module):
@@ -75,8 +76,7 @@ class CrossEntropyLoss(nn.Module):
 
 
 
-def train(teacher_model, network_model, train_loader, test_loader, optimizer, scheduler, criterion, args):
-    teacher_model.eval()
+def train(network_model, train_loader, test_loader, optimizer, scheduler, criterion, args):
     network_model.train()
     model_dir = os.path.join(args.log_model_dir, 'L-{}_W-{}_O-{}_T-{}'.format(
         args.loss, args.weight_num_bits, args.output_f_num_bits, args.temperature))
@@ -90,66 +90,52 @@ def train(teacher_model, network_model, train_loader, test_loader, optimizer, sc
         scheduler.step()
         for idx, data in enumerate(train_loader):
             global_cnt += 1
-            img, label = data
-            label = label.squeeze(1)
-            if torch.cuda.is_available():
-                img, label = img.cuda(), label.cuda()
-            output = network_model(img)
-            with torch.no_grad():
-                output_teacher = teacher_model(img)
+            img = data 
 
-            loss = criterion(output, output_teacher, label)
+            if torch.cuda.is_available():
+                img = img.cuda() 
+            output = network_model(img[0], img[1])
+
+            loss = criterion(output, img[2]) 
             optimizer.zero_grad()
             loss.backward()
             optimizer.step()
 
             if global_cnt % args.show_interval == 0:
-                correct_num = torch.eq(torch.max(output, dim=1)[1], label).sum()
-                accuracy = correct_num.cpu().float()/label.shape[0]
                 print(
                     '[epoch:{}, batch:{}]\t'.format(epoch, idx),
                     '[loss: {:.3f}]\t'.format(loss.item()),
-                    '[accuracy: {:.3f}]\t'.format(accuracy),
                     '[lr: {:.6f}]'.format(scheduler.get_lr()[0])
                 )
                 print(
                     '[epoch:{}, batch:{}]\t'.format(epoch, idx),
                     '[loss: {:.3f}]\t'.format(loss.item()),
-                    '[accuracy: {:.3f}]\t'.format(accuracy),
                     '[lr: {:.6f}]'.format(scheduler.get_lr()[0]),
                     file=log
                 )
         if epoch % args.test_interval == 0:
             loss_sum = 0.
-            acc_sum = 0.
             test_batch_num = 0
             total_num = 0
             for idx, data in enumerate(test_loader):
                 test_batch_num += 1
-                img, label = data
+                img  = data
                 total_num += img.shape[0]
-                label = label.squeeze(1)
                 if torch.cuda.is_available():
-                    img, label = img.cuda(), label.cuda()
-                output = network_model(img)
-                with torch.no_grad():
-                    output_teacher = teacher_model(img)
+                    img = img.cuda()
+                output = network_model(img[0], img[1])
 
-                loss = criterion(output, output_teacher, label)
+                loss = criterion(output, img[2]) 
 
                 loss_sum += loss.item()
-                acc_sum += torch.eq(torch.max(output, dim=1)
-                                    [1], label).sum().cpu().float()
             print('\n***************validation result*******************')
             print(
                 'loss_avg: {:.3f}\t'.format(loss_sum / test_batch_num),
-                'accuracy_avg: {:.3f}'.format(acc_sum / total_num)
             )
             print('****************************************************\n')
             print('\n***************validation result*******************', file=log)
             print(
                 'loss_avg: {:.3f}\t'.format(loss_sum / test_batch_num),
-                'accuracy_avg: {:.3f}'.format(acc_sum / total_num),
                 file=log
             )
             print('****************************************************\n', file=log)
@@ -166,31 +152,18 @@ def test(network_model, test_loader):
 
 
 def main(args):
-    is_train = (args.evaluate == True)
-    teacher_model = BigModel()
-    network_model = Model(w_num_bits=args.weight_num_bits,
-                          out_f_num_bits=args.output_f_num_bits, is_train=is_train)
 
-    if args.load_path is None:
-        raise ValueError
-    else:
-        state_dict = torch.load(args.load_path)
-        teacher_model.load_state_dict(state_dict, strict=True)
+    is_train = (args.evaluate == True)
+
+    network_model = SynthesizeBlur(norm_type = args.norm_type)
 
     if torch.cuda.is_available():
-        teacher_model = teacher_model.cuda()
         network_model = network_model.cuda()
 
-    if args.loss == 'CrossEntropyNormal':
-        criterion = CrossEntropyLoss(mode='normal')
-    elif args.loss == 'CrossEntropyTeacher':
-        criterion = CrossEntropyLoss(mode='teacher')
-    elif args.loss == 'CrossEntropyHardSoftTeacher':
-        criterion = CrossEntropyLoss(mode='hard_soft_teacher')
-    elif args.loss == 'CrossEntropyHardSoftGt':
-        criterion = CrossEntropyLoss(mode='hard_soft_gt')
+    if args.loss == 'l1_loss':
+        criterion = nn.L1Loss(reduction='mean') # none | mean | sum
     else:
-        raise ValueError
+        raise ValueError # 别的loss
 
     def lr_func(epoch):
         lr_factor = args.lr_factor_dict
@@ -207,10 +180,15 @@ def main(args):
     scheduler = torch.optim.lr_scheduler.LambdaLR(optimizer, lr_func)
 
     transform = transforms.Compose([
+        transforms.RandomCrop(256),
+        transforms.RandomHorizontalFlip(p=0.5),
+        transforms.RandomVerticalFlip(p=0.5),
+        transforms.RandomRotation(90),
         transforms.ToTensor(),
+
     ])
-    train_set = SvhnDataset(root=args.root, train=True, transform=transform)
-    test_set = SvhnDataset(root=args.root, train=False, transform=transform)
+    train_set = BlurDataset(root=args.root, train=True, transform=transform)
+    test_set = BlurDataset(root=args.root, train=False, transform=transform)
     train_loader = DataLoader(train_set, batch_size=args.batch_size, shuffle=True,
                               num_workers=args.num_workers, pin_memory=True)
     test_loader = DataLoader(test_set, batch_size=args.batch_size, shuffle=False,
@@ -220,22 +198,19 @@ def main(args):
         test(network_model, test_loader)
         return
 
-    train(teacher_model, network_model, train_loader,
+    train(network_model, train_loader,
           test_loader, optimizer, scheduler, criterion, args)
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument('--root', default='./')
-    parser.add_argument('--load_path', default='teacher.pth')
     parser.add_argument('--log_model_dir', default='./train_log')
     parser.add_argument('--batch_size', default=256)
     parser.add_argument('--num_workers', default=2)
-    parser.add_argument('--loss', default='CrossEntropyHardSoftGt')
-    parser.add_argument('--weight_num_bits', default=2)
-    parser.add_argument('--output_f_num_bits', default=1)
-    parser.add_argument('--temperature', default=15.0)
-    parser.add_argument('--init_lr', default=0.01)
+    parser.add_argument('--loss', default='l1_loss')
+    parser.add_argument('--norm_type', default=None)
+    parser.add_argument('--init_lr', default=2e-5)
     parser.add_argument('--lr_factor_dict', default={15: 1, 40: 0.1, 60: 0.05})
     parser.add_argument('--weight_decay', default=1e-10)
     parser.add_argument('--epoch', default=60)

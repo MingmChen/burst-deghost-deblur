@@ -1,8 +1,6 @@
 # -*- coding:utf-8 -*-
-from utils.log import time_log
-import base_model.nn_module as M
 '''
-version 1: without any encapsulation
+version 2:  roughly encapsulation
 @butub
 '''
 import torch
@@ -10,7 +8,8 @@ import torch.nn as nn
 import torch.nn.functional as F
 import sys
 sys.path.append('../')
-#from burst_deblur.network.burst_deblur_network import LayerConv, DownsampleConv, MidConv, UpsampleConv
+from utils.log import time_log
+import base_model.nn_module as M
 dtype = torch.cuda.FloatTensor
 dtype_long = torch.cuda.LongTensor
 
@@ -249,12 +248,12 @@ class UpsampleConv(nn.Module):
         return x
 
 
-class SythesizeBlur(nn.Module):
+class SynthesizeBlur(nn.Module):
     encoder_list = [32, 64, 128, 256]
     decoder_list = [256, 128, 64, 32]
 
     def __init__(self, in_channels=6, layers=3, init_type='xavier', norm_type=None):
-        super(SythesizeBlur, self).__init__()
+        super(SynthesizeBlur, self).__init__()
         if torch.cuda.is_available():
             self.device = 'cuda'
         else:
@@ -664,7 +663,7 @@ class SythesizeBlur(nn.Module):
 
 
 def test_synthesize_blur():
-    net = SythesizeBlur()
+    net = SynthesizeBlur()
     print(net)
     inputs = torch.randn(4, 3, 256, 256)
     if torch.cuda.is_available():
