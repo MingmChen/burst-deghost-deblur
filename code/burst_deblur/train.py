@@ -20,15 +20,20 @@ from torchvision import transforms
 sys.path.append('../')
 
 from dataset import BlurDataset # assume dataset name is BlurDataset with data: NxCxHxW , label
-from network import BurstDeblurMP
+#from network import BurstDeblurMP
+from network.burst_deblur_network import BurstDeblurMP
+from network.loss import GradientLoss
 
-def train(network_model, train_loader, test_loader, optimizer, scheduler, criterion, args):
+def train(network_model, train_loader, test_loader, optimizer, scheduler, args):
     network_model.train()
     model_dir = os.path.join(args.log_model_dir, '{}'.format(args.exp_name))
     if not os.path.exists(model_dir):
         os.mkdir(model_dir)
     log = open(os.path.join(model_dir, 'log.txt'), 'w')
     print(args, file=log)
+
+    criterion_l1 = nn.L1loss(reduction="mean")
+    criterion_gradient = GradientLoss(alpha=1.0)
 
     global_cnt = 0
     for epoch in range(args.epoch):
@@ -41,7 +46,7 @@ def train(network_model, train_loader, test_loader, optimizer, scheduler, criter
                 img, gt = img.cuda(), gt.cuda()
             output = network_model(img)
 
-            loss = criterion(output, gt)
+            loss = criterion_l1(output, gt)/10 + criterion_gradient(output, gt)
             optimizer.zero_grad()
             loss.backward()
             optimizer.step()
@@ -106,10 +111,10 @@ def main(args):
     if torch.cuda.is_available():
         network_model = network_model.cuda()
 
-    if args.loss == 'l1_loss': # todo
-        criterion = nn.L1Loss(reduction='mean') # none | mean | sum
-    else:
-        raise ValueError
+    #if args.loss == 'l1_loss': # todo
+    #    criterion = nn.L1Loss(reduction='mean') # none | mean | sum
+    #else:
+    #    raise ValueError
 
     def lr_func(epoch):
         lr_factor = args.lr_factor_dict
@@ -147,7 +152,12 @@ def main(args):
         return
 
     train(network_model, train_loader,
-          test_loader, optimizer, scheduler, criterion, args)
+          test_loader, optimizer, scheduler, args)
+
+
+
+
+
 
 
 if __name__ == "__main__":
@@ -156,7 +166,7 @@ if __name__ == "__main__":
     parser.add_argument('--log_model_dir', default='./train_log')
     parser.add_argument('--batch_size', default=32)
     parser.add_argument('--num_workers', default=3)
-    parser.add_argument('--loss', default='l1_loss')
+    #parser.add_argument('--loss', default='l1_loss')
     parser.add_argument('--norm_type', default=None)
     parser.add_argument('--init_lr', default=2e-5)
     #parser.add_argument('--lr_factor_dict', default={15: 1, 40: 0.1, 60: 0.05})
