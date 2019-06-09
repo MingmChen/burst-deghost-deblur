@@ -587,9 +587,6 @@ class SynthesizeBlur(nn.Module):
         weight1 = self.weight1(x8)   # Nx17xHxW
         weight2 = self.weight2(x8)   # Nx17xHxW
 
-        # todo feed line prediction layer
-        sample = self.violent_cycle(
-            offset1, offset2, weight1, weight2, inp1, inp2)
         sample = self.line_prediction(
             offset1, offset2, weight1, weight2, inp1, inp2)
 
