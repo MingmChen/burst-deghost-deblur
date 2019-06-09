@@ -19,12 +19,37 @@ from torch.utils.data import DataLoader
 from torchvision import transforms
 sys.path.append('../')
 
-from dataset import BlurDataset # assume dataset name is BlurDataset with data: NxCxHxW , label
+from dataset import BurstBlurDataset # assume dataset name is BlurDataset with data: NxCxHxW , label
 #from network import BurstDeblurMP
 from network.burst_deblur_network import BurstDeblurMP
 from network.loss import GradientLoss
 
-def train(network_model, train_loader, test_loader, optimizer, scheduler, args):
+
+class L1GradLoss(nn.Module):
+    def __init__(self, alpha=0.1):
+        super(L1GradLoss, self).__init__()
+        self.L1 = nn.L1Loss()
+        self.grad = GradientLoss(alpha)
+
+    def forward(self, x, gt):
+        return self.L1(x, gt) + self.grad(x, gt)
+
+
+class AddNoise(object):
+    def __init__(self, sigma_read=1e-5, sigma_shot=4e-3):
+        self.sigma_read = sigma_read
+        self.sigma_shot = sigma_shot
+
+    def __call__(self, x):
+        assert(isinstance(x, torch.Tensor))
+        variance = torch.ones(x.shape) * self.sigma_read**2
+        variance += self.sigma_shot*x
+        std = torch.sqrt(variance)
+        x = torch.normal(x, std)
+        return x
+
+
+def train(network_model, train_loader, test_loader, optimizer, scheduler, criterion, args):
     network_model.train()
     model_dir = os.path.join(args.log_model_dir, '{}'.format(args.exp_name))
     if not os.path.exists(model_dir):
@@ -32,8 +57,6 @@ def train(network_model, train_loader, test_loader, optimizer, scheduler, args):
     log = open(os.path.join(model_dir, 'log.txt'), 'w')
     print(args, file=log)
 
-    criterion_l1 = nn.L1loss(reduction="mean")
-    criterion_gradient = GradientLoss(alpha=1.0)
 
     global_cnt = 0
     for epoch in range(args.epoch):
@@ -46,7 +69,7 @@ def train(network_model, train_loader, test_loader, optimizer, scheduler, args):
                 img, gt = img.cuda(), gt.cuda()
             output = network_model(img)
 
-            loss = criterion_l1(output, gt)/10 + criterion_gradient(output, gt)
+            loss = criterion(output, gt)
             optimizer.zero_grad()
             loss.backward()
             optimizer.step()
@@ -111,37 +134,29 @@ def main(args):
     if torch.cuda.is_available():
         network_model = network_model.cuda()
 
-    #if args.loss == 'l1_loss': # todo
-    #    criterion = nn.L1Loss(reduction='mean') # none | mean | sum
-    #else:
-    #    raise ValueError
+    if args.loss == 'l1_loss': # todo
+        criterion = nn.L1Loss(reduction='mean') # none | mean | sum
+    elif args.loss == 'l1_grad_loss':
+        criterion = L1GradLoss()
+    else:
+        raise ValueError
 
     def lr_func(epoch):
-        lr_factor = args.lr_factor_dict
-        lr_key = list(lr_factor.keys())
-        index = 0
-        for i in range(len(lr_key)):
-            if epoch < lr_key[i]:
-                index = i
-                break
-        return lr_factor[lr_key[index]]
+        return np.pow(0.999997, epoch)
 
     optimizer = torch.optim.Adam(
         network_model.parameters(), lr=args.init_lr, weight_decay=args.weight_decay)
     scheduler = torch.optim.lr_scheduler.LambdaLR(optimizer, lr_func)
 
     transform = transforms.Compose([ # todo
-        transforms.RandomCrop(256),
-        transforms.RandomHorizontalFlip(p=0.5),
-        transforms.RandomVerticalFlip(p=0.5),
-        transforms.RandomRotation(90),
         transforms.ToTensor(),
-
+        transforms.normalize(mean=(0.5,0.5), std=(0.5,0.5)),
+        AddNoise()
     ])
 
-    train_set = BlurDataset(root=args.root, train=True, transform=transform)
-    test_set = BlurDataset(root=args.root, train=False, transform=transform)
-    
+    train_set = BurstBlurDataset(root=args.root, train=True, transform=transform)
+    test_set = BurstBlurDataset(root=args.root, train=False, transform=transform)
+
     train_loader = DataLoader(train_set, batch_size=args.batch_size, shuffle=True,
                               num_workers=args.num_workers, pin_memory=True)
     test_loader = DataLoader(test_set, batch_size=args.batch_size, shuffle=False,
@@ -155,29 +170,22 @@ def main(args):
           test_loader, optimizer, scheduler, args)
 
 
-
-
-
-
-
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument('--root', default='/mnt/lustre/niuyazhe/data/syn_data')
+    parser.add_argument('--root', default='/mnt/lustre/niuyazhe/data/burst_deblur_data')
     parser.add_argument('--log_model_dir', default='./train_log')
     parser.add_argument('--batch_size', default=32)
     parser.add_argument('--num_workers', default=3)
-    #parser.add_argument('--loss', default='l1_loss')
+    parser.add_argument('--loss', default='l1_grad_loss')
     parser.add_argument('--norm_type', default=None)
-    parser.add_argument('--init_lr', default=2e-5)
-    #parser.add_argument('--lr_factor_dict', default={15: 1, 40: 0.1, 60: 0.05})
-    parser.add_argument('--lr_factor_dict', default={0:1})
+    parser.add_argument('--init_lr', default=3e-4)
     parser.add_argument('--weight_decay', default=1e-5)
-    parser.add_argument('--epoch', default=100)
+    parser.add_argument('--epoch', default=1000)
     parser.add_argument('--evaluate', default=False)
     parser.add_argument('--show_interval', default=100)
     parser.add_argument('--test_interval', default=2)
     parser.add_argument('--snapshot_interval', default=1)
-    parser.add_argument('--exp_name', 'syn_baseline')
+    parser.add_argument('--exp_name', 'burst_deblur_baseline')
     args = parser.parse_args()
     if not os.path.exists(args.log_model_dir):
         os.mkdir(args.log_model_dir)
