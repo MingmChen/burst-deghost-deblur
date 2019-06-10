@@ -4,13 +4,15 @@ import torch.nn.functional as F
 
 
 class GradientLoss(nn.Module):
-    grad_kernel_type_list = ['sobel']
+    #grad_kernel_type_list = ['sobel']
 
     def __init__(self, grad_kernel_type='sobel', alpha=1.0, size_average=True):
-        assert(grad_kernel_type in self.grad_kernel_type_list)
+        # assert(grad_kernel_type in GradientLoss.grad_kernel_type_list)
         super(GradientLoss, self).__init__()
         if grad_kernel_type == 'sobel':
             self.grad_cal = self._sobel
+        else:
+            raise ValueError
         self.alpha = alpha
         self.device = 'cuda' if torch.cuda.is_available() else 'cpu'
         self.size_average = size_average
@@ -28,8 +30,10 @@ class GradientLoss(nn.Module):
         grad_y = F.conv2d(img, kernel_y, stride=1, padding=1, groups=C)
         return torch.abs(grad_x) + torch.abs(grad_y)
 
-    def forward(self, x):
-        loss = self.alpha*self.grad_cal(x)
+    def forward(self, x, gt):
+        x_grad = self.grad_cal(x)
+        gt_grad = self.grad_cal(gt)
+        loss = self.alpha*torch.abs(x_grad-gt_grad)
         if self.size_average:
             loss = loss.mean()
         else:
@@ -40,7 +44,7 @@ class GradientLoss(nn.Module):
 def test_grad_loss():
     inputs = torch.randn(4, 1, 32, 32)
     loss = GradientLoss(alpha=1.0)
-    loss_val = loss(inputs)
+    loss_val = loss(inputs, inputs-0.1)
     print(loss_val.item())
 
 

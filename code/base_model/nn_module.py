@@ -152,7 +152,7 @@ def conv2d_block(in_channels,
                  dilation=1,
                  groups=1,
                  init_type=None,
-                 pad_type='zero',
+                 pad_type='reflect',
                  activation=None,
                  norm_type=None):
     # conv2d + norm + activation

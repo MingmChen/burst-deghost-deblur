@@ -44,7 +44,7 @@ class LayerConv(nn.Module):
 
 
 class DownsampleConv(nn.Module):
-    def __init__(self, in_channels, out_channels, layers, downsample_type="maxpool", init_type="xavier", activation=nn.ReLU(), norm_type='bn'):
+    def __init__(self, in_channels, out_channels, layers, downsample_type="maxpool", init_type="xavier", activation=nn.ReLU(), norm_type='BN'):
         super(DownsampleConv, self).__init__()
         if downsample_type == "maxpool":
             self.downsample = nn.MaxPool2d(kernel_size=2)
@@ -98,7 +98,7 @@ class DownsampleConv(nn.Module):
 
 
 class UpsampleConv(nn.Module):
-    def __init__(self, in_channels, out_channels, layers, upsample_type="bilinear", init_type="xavier", activation=nn.ReLU(), norm_type='bn'):
+    def __init__(self, in_channels, out_channels, layers, upsample_type="bilinear", init_type="xavier", activation=nn.ReLU(), norm_type='BN'):
         super(UpsampleConv, self).__init__()
         convs = []
         for i in range(layers):
@@ -153,7 +153,7 @@ class UpsampleConv(nn.Module):
 
 class MidConv(nn.Module):
     def __init__(self, in_channels, out_channels, layers, downsample_type="maxpool",
-                 upsample_type="bilinear", init_type="xavier", activation=nn.ReLU(), norm_type='bn'):
+                 upsample_type="bilinear", init_type="xavier", activation=nn.ReLU(), norm_type='BN'):
         super(MidConv, self).__init__()
         if downsample_type == "maxpool":
             self.downsample = nn.MaxPool2d(kernel_size=2)
@@ -224,14 +224,16 @@ class MidConv(nn.Module):
 
 
 class BurstDeblurMP(nn.Module):
-    encoder_list = [32, 64, 128, 256]
-    decoder_list = [256, 128, 64, 32]
+    #encoder_list = [32, 64, 128, 256]
+    #decoder_list = [256, 128, 64, 32]
+    encoder_list = [16, 32, 64, 128]
+    decoder_list = [128, 64, 32, 16]
 
-    def __init__(self, in_channels=3, layers=2, init_type="xavier", norm_type='bn'):
+    def __init__(self, in_channels=1, layers=2, init_type="xavier", norm_type='BN'):
         super(BurstDeblurMP, self).__init__()
         self.init_type = init_type
         self.bn = norm_type
-        self.activation = nn.ELU()
+        self.activation = nn.ELU(inplace=True)
         self.layers = layers
 
         self.input_conv = LayerConv(
