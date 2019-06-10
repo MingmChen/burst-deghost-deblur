@@ -22,6 +22,15 @@ from dataset import BlurDataset
 from network import SynthesizeBlur
 
 
+class Normalize(object):
+    def __init__(self, min_val=0, max_val=255):
+        self.min_val = min_val
+        self.max_val = max_val
+
+    def __call__(self, x):
+        return (x - self.min_val)*1.0 / (self.max_val - self.min_val)
+
+
 def train(network_model, train_loader, test_loader, optimizer, scheduler, criterion, args):
     network_model.train()
     model_dir = os.path.join(args.log_model_dir, '{}'.format(args.exp_name))
@@ -49,12 +58,12 @@ def train(network_model, train_loader, test_loader, optimizer, scheduler, criter
             if global_cnt % args.show_interval == 0:
                 print(
                     '[epoch:{}, batch:{}]\t'.format(epoch, idx),
-                    '[loss: {:.3f}]\t'.format(loss.item()),
+                    '[loss: {:.5f}]\t'.format(loss.item()),
                     '[lr: {:.6f}]'.format(scheduler.get_lr()[0])
                 )
                 print(
                     '[epoch:{}, batch:{}]\t'.format(epoch, idx),
-                    '[loss: {:.3f}]\t'.format(loss.item()),
+                    '[loss: {:.5f}]\t'.format(loss.item()),
                     '[lr: {:.6f}]'.format(scheduler.get_lr()[0]),
                     file=log
                 )
@@ -65,7 +74,7 @@ def train(network_model, train_loader, test_loader, optimizer, scheduler, criter
             for idx, data in enumerate(test_loader):
                 test_batch_num += 1
                 img1, img2, gt = data
-                total_num += img.shape[0]
+                total_num += img1.shape[0]
 
                 if torch.cuda.is_available():
                     img1, img2, gt = img1.cuda(), img2.cuda(), gt.cuda()
@@ -76,12 +85,12 @@ def train(network_model, train_loader, test_loader, optimizer, scheduler, criter
                 loss_sum += loss.item()
             print('\n***************validation result*******************')
             print(
-                'loss_avg: {:.3f}\t'.format(loss_sum / test_batch_num),
+                'loss_avg: {:.5f}\t'.format(loss_sum / test_batch_num),
             )
             print('****************************************************\n')
             print('\n***************validation result*******************', file=log)
             print(
-                'loss_avg: {:.3f}\t'.format(loss_sum / test_batch_num),
+                'loss_avg: {:.5f}\t'.format(loss_sum / test_batch_num),
                 file=log
             )
             print('****************************************************\n', file=log)
@@ -105,9 +114,10 @@ def main(args):
 
     if torch.cuda.is_available():
         network_model = network_model.cuda()
+        network_model = torch.nn.DataParallel(network_model)
 
     if args.loss == 'l1_loss':
-        criterion = nn.L1Loss(reduction='mean') # none | mean | sum
+        criterion = nn.L1Loss() # none | mean | sum
     else:
         raise ValueError
 
@@ -126,12 +136,12 @@ def main(args):
     scheduler = torch.optim.lr_scheduler.LambdaLR(optimizer, lr_func)
 
     transform = transforms.Compose([
-        transforms.RandomCrop(256),
-        transforms.RandomHorizontalFlip(p=0.5),
-        transforms.RandomVerticalFlip(p=0.5),
-        transforms.RandomRotation(90),
+        transforms.CenterCrop(256),
+        #transforms.RandomHorizontalFlip(p=0.5),
+        #transforms.RandomVerticalFlip(p=0.5),
+        #transforms.RandomRotation(90),
         transforms.ToTensor(),
-
+        Normalize()
     ])
     train_set = BlurDataset(root=args.root, train=True, transform=transform)
     test_set = BlurDataset(root=args.root, train=False, transform=transform)
@@ -150,9 +160,9 @@ def main(args):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument('--root', default='/mnt/lustre/niuyazhe/data/syn_data')
+    parser.add_argument('--root', default='/mnt/lustre/niuyazhe/data/syn_data_sort')
     parser.add_argument('--log_model_dir', default='./train_log')
-    parser.add_argument('--batch_size', default=32)
+    parser.add_argument('--batch_size', default=16)
     parser.add_argument('--num_workers', default=3)
     parser.add_argument('--loss', default='l1_loss')
     parser.add_argument('--norm_type', default=None)
@@ -165,7 +175,7 @@ if __name__ == "__main__":
     parser.add_argument('--show_interval', default=100)
     parser.add_argument('--test_interval', default=2)
     parser.add_argument('--snapshot_interval', default=1)
-    parser.add_argument('--exp_name', 'syn_baseline')
+    parser.add_argument('--exp_name', default='syn_baseline')
     args = parser.parse_args()
     if not os.path.exists(args.log_model_dir):
         os.mkdir(args.log_model_dir)

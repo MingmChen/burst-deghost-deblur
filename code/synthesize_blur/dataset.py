@@ -19,7 +19,7 @@ class BlurDataset(Dataset):
         return len(self.data_list)
 
     def open_image(self, path):
-        return Image.Open(path).convert('RGB')
+        return Image.open(path).convert('RGB')
 
     def __getitem__(self, idx):
         item = self.data_list[idx]
