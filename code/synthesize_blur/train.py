@@ -12,6 +12,8 @@
 import os
 import sys
 import argparse
+import numpy as np
+import cv2
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -102,19 +104,34 @@ def train(network_model, train_loader, test_loader, optimizer, scheduler, criter
     log.close()
 
 
-def test(network_model, test_loader):
-    raise NotImplementedError
+def test(network_model, test_loader, args):
+    for idx, data in enumerate(test_loader):
+        img1, img2, gt = data
+
+        if torch.cuda.is_available():
+            img1, img2, gt = img1.cuda(), img2.cuda(), gt.cuda()
+        with torch.no_grad():
+            output = network_model(img1, img2)
+        output_img = output.cpu().numpy()[0].transpose(1,2,0)
+        print(output_img.mean(), '1output')
+        maxv = output_img.max()
+        minv = output_img.min()
+        output_img = ((output_img-minv)/(maxv-minv)*255).clip(0, 255).astype(np.uint8)
+        print(output_img.mean(), '2output')
+        cv2.imwrite('output/{}.jpg'.format(idx), output_img)
+        print(idx)
 
 
 def main(args):
-
-    is_train = (args.evaluate == True)
 
     network_model = SynthesizeBlur(norm_type=args.norm_type)
 
     if torch.cuda.is_available():
         network_model = network_model.cuda()
         network_model = torch.nn.DataParallel(network_model)
+
+    network_model.load_state_dict(torch.load('syn_baseline/epoch-52.pth'))
+    print('load ok')
 
     if args.loss == 'l1_loss':
         criterion = nn.L1Loss() # none | mean | sum
@@ -151,7 +168,7 @@ def main(args):
                              num_workers=args.num_workers, pin_memory=True)
 
     if args.evaluate:
-        test(network_model, test_loader)
+        test(network_model, test_loader, args)
         return
 
     train(network_model, train_loader,
@@ -162,7 +179,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument('--root', default='/mnt/lustre/niuyazhe/data/syn_data_sort')
     parser.add_argument('--log_model_dir', default='./train_log')
-    parser.add_argument('--batch_size', default=16)
+    parser.add_argument('--batch_size', default=1)
     parser.add_argument('--num_workers', default=3)
     parser.add_argument('--loss', default='l1_loss')
     parser.add_argument('--norm_type', default=None)
@@ -171,7 +188,7 @@ if __name__ == "__main__":
     parser.add_argument('--lr_factor_dict', default={0:1})
     parser.add_argument('--weight_decay', default=1e-5)
     parser.add_argument('--epoch', default=100)
-    parser.add_argument('--evaluate', default=False)
+    parser.add_argument('--evaluate', default=True)
     parser.add_argument('--show_interval', default=100)
     parser.add_argument('--test_interval', default=2)
     parser.add_argument('--snapshot_interval', default=1)

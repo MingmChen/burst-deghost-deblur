@@ -1,6 +1,7 @@
 import os
 from PIL import Image
 from torch.utils.data import Dataset
+import torch
 
 
 class BurstBlurDataset(Dataset):
@@ -20,11 +21,17 @@ class BurstBlurDataset(Dataset):
         return len(self.data_list)
 
     def open_image(self, path):
-        return Image.Open(path).convert('RGB')
+        try:
+            return Image.open(path).convert('RGB')
+        except OSError:
+            print('error', path)
 
     def __getitem__(self, idx):
         item = self.data_list[idx]
-        split_item = item[:-1].split('\t')
+        if item[-1]=='\n':
+            split_item = item[:-1].split('\t')
+        else:
+            split_item = item[:].split('\t')
         data = []
         for i in range(0, self.burst):
             img = self.open_image(split_item[i])
