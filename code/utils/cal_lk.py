@@ -4,6 +4,10 @@ import os
 import numpy as np
 import cv2
 import matplotlib.pyplot as plt
+import torch
+import torch.nn.functional as F
+sys.path.append('../synthesize_blur')
+import viz_flow as viz
 
 data_dir = "./"
 
@@ -35,11 +39,31 @@ def find_last(s, t):
         return ret
 
 
+def viz_lk(flow, path):
+    H, W, _ = flow.shape
+    f = np.abs(flow[:, :, 0]) + np.abs(flow[:, :, 1])
+    f = (f - f.min()) / (f.max() - f.min())
+    f *= 255
+    f = cv2.GaussianBlur(f, (11, 11), 0)
+    f = torch.FloatTensor(f).view(1, 1, H, W)
+    f = F.max_pool2d(f, kernel_size=7, stride=7)
+    f = f.squeeze().numpy()
+    f = cv2.GaussianBlur(f, (5,5), 0)
+    plt.imshow(f)
+    plt.savefig(path)
+    #plt.show()
+    plt.clf()
+
+    return f
+
+
 def cal_lk(old_path, new_path):
     old_img = cv2.imread(old_path)
+    H, W, _ = old_img.shape
     old_gray = cv2.cvtColor(old_img, cv2.COLOR_BGR2GRAY)
     new_img = cv2.imread(new_path)
     new_gray = cv2.cvtColor(new_img, cv2.COLOR_BGR2GRAY)
+    print(old_img.shape)
 
     color = np.random.randint(0, 255, (100000, 3))
     mask = np.zeros_like(old_img)
@@ -53,6 +77,7 @@ def cal_lk(old_path, new_path):
     good_old = p0[st == 1]
     good = good_new - good_old
 
+    flow = np.zeros((H, W, 2))
     for i, (new, old) in enumerate(zip(good_new, good_old)):
         a, b = new.ravel()
         c, d = old.ravel()
@@ -61,7 +86,12 @@ def cal_lk(old_path, new_path):
         if gapx >= gap[0] and gapy >= gap[0] and gapx <= gap[1] and gapy <= gap[1]:
             mask = cv2.line(mask, (a, b), (c, d), color[i].tolist(), 2)
             frame = cv2.circle(new_img, (a, b), 5, color[i].tolist(), -1)
+            flow[int(d)-1, int(c)-1] = np.array((d-b, c-a))
     img = cv2.add(frame, mask)
+
+    flag = find_last(new_path, '_')
+    path = new_path[:flag] + '_flow.png'
+    viz_lk(flow, path)
 
     # plot
     img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
@@ -82,7 +112,6 @@ def cal_lk(old_path, new_path):
     plt.subplot(224)
     n2, bins2, patches2 = plt.hist(
         good_y, bins=300, range=(good_y.min(), good_y.max()), normed=0, facecolor='blue', alpha=0.75)
-    flag = find_last(new_path, '_')
     plt.savefig(new_path[:flag] + '_total.png')
     #'''
     width = 0.05
@@ -95,8 +124,8 @@ def cal_lk(old_path, new_path):
     plt.legend(loc="upper left")
     #'''
     #plt.show()
-    flag = find_last(new_path, '_')
     plt.savefig(new_path[:flag] + '_hist.png')
+    plt.clf()
 
 
 def main(data_list):
@@ -108,8 +137,6 @@ def main(data_list):
         cal_lk(old_path, new_path)
         print(old_path)
         count += 1
-        if count == 2:
-            break
 
 
 if __name__ == '__main__':
