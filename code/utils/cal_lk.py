@@ -42,7 +42,7 @@ def find_last(s, t):
 def viz_lk(flow, path):
     H, W, _ = flow.shape
     f = np.abs(flow[:, :, 0]) + np.abs(flow[:, :, 1])
-    f = (f - f.min()) / (f.max() - f.min())
+    f = (f - f.min()) / (f.max() - f.min()+1e-8)
     f *= 255
     f = cv2.GaussianBlur(f, (11, 11), 0)
     f = torch.FloatTensor(f).view(1, 1, H, W)
@@ -89,7 +89,7 @@ def cal_lk(old_path, new_path):
             flow[int(d)-1, int(c)-1] = np.array((d-b, c-a))
     img = cv2.add(frame, mask)
 
-    flag = find_last(new_path, '_')
+    flag = find_last(new_path, '.')
     path = new_path[:flag] + '_flow.png'
     viz_lk(flow, path)
 
@@ -108,19 +108,23 @@ def cal_lk(old_path, new_path):
     good_x = good_x.clip(good_x.mean()-3*good_x.std(), good_x.mean()+3*good_x.std())
     good_y = good_y.clip(good_y.mean()-3*good_y.std(), good_y.mean()+3*good_y.std())
     n1, bins1, patches1 = plt.hist(
-        good_x, bins=300, range=(good_x.min(), good_x.max()), normed=0, facecolor='green', alpha=0.75)
+        good_x, bins=100, range=(good_x.min(), good_x.max()), density=False, facecolor='green', alpha=0.75)
     plt.subplot(224)
     n2, bins2, patches2 = plt.hist(
-        good_y, bins=300, range=(good_y.min(), good_y.max()), normed=0, facecolor='blue', alpha=0.75)
+        good_y, bins=100, range=(good_y.min(), good_y.max()), density=False, facecolor='blue', alpha=0.75)
     plt.savefig(new_path[:flag] + '_total.png')
     #'''
-    width = 0.05
+    width = 0.02
     fig, ax = plt.subplots()
+    n1 /= n1.sum()
+    n2 /= n2.sum()
 
     rects1 = ax.bar(bins1[:-1], n1, width,
-                    label="x displacement", lw=1, alpha=0.4, facecolor='yellow')
+                    label="x displacement", lw=1, alpha=0.4, facecolor='orange')
     rects2 = ax.bar(bins2[:-1], n2, width,
                     label="y displacement", lw=1, alpha=0.4, facecolor='green')
+    bin_min = min(bins1.min(), bins2.min())
+    rects3 = ax.bar(bin_min, 0.3, width, lw=1, facecolor='blue', alpha=0.4, label='reference')
     plt.legend(loc="upper left")
     #'''
     #plt.show()
@@ -140,5 +144,6 @@ def main(data_list):
 
 
 if __name__ == '__main__':
+    #data_list = './motion_trans.txt'
     data_list = './motion.txt'
     main(data_list)
