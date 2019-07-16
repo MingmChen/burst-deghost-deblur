@@ -174,7 +174,7 @@ def main(args):
     scheduler = torch.optim.lr_scheduler.LambdaLR(optimizer, lr_func)
 
     transform_train = transforms.Compose([  # todo
-        transforms.RandomCrop(384),
+        transforms.RandomCrop(256),
         transforms.ToTensor(),
         Normalize(),
         Mosaic(),
@@ -182,7 +182,7 @@ def main(args):
     ])
 
     transform_test = transforms.Compose([  # todo
-        transforms.CenterCrop(384),
+        transforms.CenterCrop(256),
         transforms.ToTensor(),
         Normalize(),
         Mosaic(),
@@ -207,8 +207,8 @@ def main(args):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument('--test_root', default='/mnt/lustre/niuyazhe/coco_burst_deblur_val')
-    parser.add_argument('--train_root', default='/mnt/lustre/niuyazhe/coco_burst_deblur_train')  # todo
+    parser.add_argument('--test_root', default='/mnt/lustre/share/niuyazhe/coco_burst_deblur_val')
+    parser.add_argument('--train_root', default='/mnt/lustre/share/niuyazhe/coco_burst_deblur_train_error')
     parser.add_argument('--log_model_dir', default='./train_log')
     parser.add_argument('--batch_size', default=4)
     parser.add_argument('--num_workers', default=3)
