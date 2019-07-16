@@ -49,12 +49,18 @@ def single_image_burst(inputs, output_dir, burst_num=8):
 
     for i in range(burst_num):
         kernel = adaptive_blur_kernel(gt)
+        if kernel is None:
+            with open(os.path.join(output_dir, 'error.txt'), 'a') as f:
+                f.writelines(filename+'\n')
+            print('invalid img name:{}, size:{}'.format(filename, gt.shape))
+            return False
         blur_img = apply_blur(gt, kernel)
         cv2.imwrite(os.path.join(output_dir, filename.split('.')[0]+'_{}.png'.format(i+1)), blur_img)
+    return True
 
 
 def generate_burst_blur_data():
-    output_dir='coco_burst_deblur_train/'
+    output_dir = 'coco_burst_deblur_train'
     root_dir = 'mscoco2017/train2017'
     anno_file = 'mscoco2017/annotations/instances_train2017.json'
     coco_dataset = CocoDataset(root_dir, anno_file)
@@ -68,10 +74,12 @@ def generate_burst_blur_data():
     temp_list = []
     print(len(coco_dataset))
     for idx, data in enumerate(coco_dataset):
-        img_list.append(data['filename']+'\n')
         temp_list.append(data)
         if len(temp_list) == 24:
-            pool.map(func, temp_list)
+            handle = pool.map(func, temp_list)
+            for i, flag in enumerate(handle):
+                if flag:
+                    img_list.append(temp_list[i]['filename']+'\n')
             temp_list = []
             print(idx)
     pool.close()

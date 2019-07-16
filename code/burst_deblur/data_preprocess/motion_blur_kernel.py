@@ -61,9 +61,16 @@ def apply_blur(img, kernel, gauss_size=5, sigma_range=(0.8, 1.2)):
 def adaptive_blur_kernel(img, step=128, kernel_size=51):
     H = 3000
     W = 4000
+    size = 256
     h, w = img.shape[:2]
-    ratio = max(h/H, w/W)
-    kernel = generate_kernel(step=(int)(step*ratio)+1, kernel_size=(int)(kernel_size*ratio)//2*2+1)
+    ratio = min(h/H, w/W)
+    if h < size or w < size:
+        return None
+    try:
+        kernel = generate_kernel(step=(int)(step*ratio)+1, kernel_size=(int)(kernel_size*ratio)//2*2+1)
+    except IndexError:
+        print(ratio, 'generate kernel error')
+        return None
     return kernel
 
 
