@@ -17,11 +17,11 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torch.utils.data import DataLoader
 from torchvision import transforms
+
 sys.path.append('../')
 import numpy as np
-
-from dataset import BurstBlurDataset # assume dataset name is BlurDataset with data: NxCxHxW , label
-#from network import BurstDeblurMP
+# assume dataset name is BlurDataset with data: NxCxHxW , label
+from dataset import CocoBlurDataset
 from network.burst_deblur_network import BurstDeblurMP
 from network.loss import GradientLoss
 import math
@@ -43,7 +43,7 @@ class Normalize(object):
         self.max_val = max_val
 
     def __call__(self, x):
-        return (x - self.min_val)*1.0 / (self.max_val - self.min_val)
+        return (x - self.min_val) * 1.0 / (self.max_val - self.min_val)
 
 
 class AddNoise(object):
@@ -52,9 +52,9 @@ class AddNoise(object):
         self.sigma_shot = sigma_shot
 
     def __call__(self, x):
-        assert(isinstance(x, torch.Tensor))
-        variance = torch.ones(x.shape) * self.sigma_read**2
-        variance += self.sigma_shot*x
+        assert (isinstance(x, torch.Tensor))
+        variance = torch.ones(x.shape) * self.sigma_read ** 2
+        variance += self.sigma_shot * x
         std = torch.sqrt(variance)
         x = torch.normal(x, std)
         x = x.clamp(0, 1)
@@ -66,10 +66,10 @@ class Mosaic(object):
         self.device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
     def __call__(self, x):
-        assert(isinstance(x, torch.Tensor))
-        assert(x.shape[0] == 3)
+        assert (isinstance(x, torch.Tensor))
+        assert (x.shape[0] == 3)
         _, H, W = x.shape
-        x_mosaic = torch.zeros(1, H, W)#.to(self.device)
+        x_mosaic = torch.zeros(1, H, W)  # .to(self.device)
         x_mosaic[0, ::2, ::2] = x[0, ::2, ::2]
         x_mosaic[0, ::2, 1::2] = x[1, ::2, 1::2]
         x_mosaic[0, 1::2, ::2] = x[1, 1::2, ::2]
@@ -85,10 +85,9 @@ def train(network_model, train_loader, test_loader, optimizer, scheduler, criter
     log = open(os.path.join(model_dir, 'log.txt'), 'w')
     print(args, file=log)
 
-
     global_cnt = 0
     for epoch in range(args.epoch):
-        scheduler.step() # update learning rate
+        scheduler.step()  # update learning rate
         for idx, data in enumerate(train_loader):
             global_cnt += 1
             img, gt = data
@@ -144,7 +143,7 @@ def train(network_model, train_loader, test_loader, optimizer, scheduler, criter
 
         if epoch % args.snapshot_interval == 0:
             torch.save(network_model.state_dict(), os.path.join(
-                model_dir, 'epoch-{}.pth'.format(epoch+1)))
+                model_dir, 'epoch-{}.pth'.format(epoch + 1)))
     torch.save(network_model.state_dict(), os.path.join(model_dir, 'epoch-final{}.pth'.format(args.epoch)))
     log.close()
 
@@ -154,15 +153,14 @@ def test(network_model, test_loader):
 
 
 def main(args):
-
     network_model = BurstDeblurMP()
 
     if torch.cuda.is_available():
         network_model = network_model.cuda()
         network_model = nn.DataParallel(network_model)
 
-    if args.loss == 'l1_loss': # todo
-        criterion = nn.L1Loss(reduction='mean') # none | mean | sum
+    if args.loss == 'l1_loss':  # todo
+        criterion = nn.L1Loss(reduction='mean')  # none | mean | sum
     elif args.loss == 'l1_grad_loss':
         criterion = L1GradLoss()
     else:
@@ -175,7 +173,15 @@ def main(args):
         network_model.parameters(), lr=args.init_lr, weight_decay=args.weight_decay)
     scheduler = torch.optim.lr_scheduler.LambdaLR(optimizer, lr_func)
 
-    transform = transforms.Compose([ # todo
+    transform_train = transforms.Compose([  # todo
+        transforms.RandomCrop(256),
+        transforms.ToTensor(),
+        Normalize(),
+        Mosaic(),
+        AddNoise()
+    ])
+
+    transform_test = transforms.Compose([  # todo
         transforms.CenterCrop(256),
         transforms.ToTensor(),
         Normalize(),
@@ -183,8 +189,8 @@ def main(args):
         AddNoise()
     ])
 
-    train_set = BurstBlurDataset(root=args.root, train=True, transform=transform)
-    test_set = BurstBlurDataset(root=args.root, train=False, transform=transform)
+    train_set = CocoBlurDataset(root_dir=args.train_root, transform=transform_train)
+    test_set = CocoBlurDataset(root_dir=args.test_root, transform=transform_test)
 
     train_loader = DataLoader(train_set, batch_size=args.batch_size, shuffle=True,
                               num_workers=args.num_workers, pin_memory=True)
@@ -201,7 +207,8 @@ def main(args):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument('--root', default='/mnt/lustre/niuyazhe/data/video_interp_train_data')
+    parser.add_argument('--test_root', default='/mnt/lustre/share/niuyazhe/coco_burst_deblur_val')
+    parser.add_argument('--train_root', default='/mnt/lustre/share/niuyazhe/coco_burst_deblur_train_error')
     parser.add_argument('--log_model_dir', default='./train_log')
     parser.add_argument('--batch_size', default=4)
     parser.add_argument('--num_workers', default=3)
@@ -214,7 +221,7 @@ if __name__ == "__main__":
     parser.add_argument('--show_interval', default=100)
     parser.add_argument('--test_interval', default=2)
     parser.add_argument('--snapshot_interval', default=1)
-    parser.add_argument('--exp_name', default = 'burst_deblur_baseline')
+    parser.add_argument('--exp_name', default='burst_deblur_baseline')
     args = parser.parse_args()
     if not os.path.exists(args.log_model_dir):
         os.mkdir(args.log_model_dir)
