@@ -1,45 +1,41 @@
 import os
-from PIL import Image
-from torch.utils.data import Dataset
+import os.path as op
 import torch
+import torchvision.transforms as transforms
+from torch.utils.data import Dataset
+from PIL import Image
 
 
-class BurstBlurDataset(Dataset):
-    def __init__(self, root=None, train=True, transform=None, burst=8):
-        assert(root is not None)
-        assert(transform is not None)
+class CocoBlurDataset(Dataset):
+    def __init__(self,
+                 root_dir,
+                 transform,
+                 burst_num=8):
+
+        self.root_dir = root_dir
+        self.meta_file = op.join(root_dir, 'meta.txt')
         self.transform = transform
-        if train:
-            self.data_path = os.path.join(root, 'train.txt')
-        else:
-            self.data_path = os.path.join(root, 'test.txt')
-        with open(self.data_path, 'r') as f:
-            self.data_list = f.readlines()
-        self.burst = burst
+        self.burst_num = burst_num
+
+        with open(self.meta_file, 'r') as f:
+            data = f.readlines()
+        self.img_ids = [x[:-1] for x in data]
 
     def __len__(self):
-        return len(self.data_list)
+        return len(self.img_ids)
 
-    def open_image(self, path):
-        try:
-            return Image.open(path).convert('RGB')
-        except OSError:
-            print('error', path)
+    def _open_image(self, path):
+        return Image.open(path).convert('RGB')
 
     def __getitem__(self, idx):
-        item = self.data_list[idx]
-        if item[-1]=='\n':
-            split_item = item[:-1].split('\t')
-        else:
-            split_item = item[:].split('\t')
-        data = []
-        for i in range(0, self.burst):
-            img = self.open_image(split_item[i])
-            img = self.transform(img)
-            data.append(img)
-        burst_img = torch.stack(data, dim=0)
+        img_id = self.img_ids[idx]
+        prefix = op.join(self.root_dir, img_id.split('.')[0])
 
-        gt = self.open_image(split_item[-1])
-        gt = self.transform(gt)
+        gt = prefix + '_gt.png'
+        burst = [prefix + '_{}.png'.format(x+1) for x in range(self.burst_num)]
+        gt = self.transform(self._open_image(gt))
+        burst = [self.transform(self._open_image(x)) for x in burst]
 
-        return burst_img, gt
+        burst = torch.stack(burst, dim=0)
+
+        return burst, gt

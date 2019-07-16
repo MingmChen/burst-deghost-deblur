@@ -63,7 +63,7 @@ def adaptive_blur_kernel(img, step=128, kernel_size=51):
     W = 4000
     h, w = img.shape[:2]
     ratio = max(h/H, w/W)
-    kernel = generate_kernel(step=(int)(step*ratio), kernel_size=(int)(kernel_size*ratio))
+    kernel = generate_kernel(step=(int)(step*ratio)+1, kernel_size=(int)(kernel_size*ratio)//2*2+1)
     return kernel
 
 
