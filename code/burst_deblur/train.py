@@ -28,13 +28,14 @@ import math
 
 
 class L1GradLoss(nn.Module):
-    def __init__(self, alpha=0.1):
+    def __init__(self, alpha=[0.1, 1.0]):
         super(L1GradLoss, self).__init__()
         self.L1 = nn.L1Loss()
-        self.grad = GradientLoss(alpha=alpha)
+        self.grad = GradientLoss()
+        self.alpha = alpha
 
     def forward(self, x, gt):
-        return self.L1(x, gt) + self.grad(x, gt)
+        return self.alpha[0]*self.L1(x, gt) + self.alpha[1]*self.grad(x, gt)
 
 
 class Normalize(object):
@@ -153,11 +154,11 @@ def test(network_model, test_loader):
 
 
 def main(args):
-    network_model = BurstDeblurMP()
+    network_model = BurstDeblurMP(in_channels=3)
 
     if torch.cuda.is_available():
         network_model = network_model.cuda()
-        network_model = nn.DataParallel(network_model)
+        #network_model = nn.DataParallel(network_model)
 
     if args.loss == 'l1_loss':  # todo
         criterion = nn.L1Loss(reduction='mean')  # none | mean | sum
@@ -170,23 +171,17 @@ def main(args):
         return math.pow(0.999997, epoch)
 
     optimizer = torch.optim.Adam(
-        network_model.parameters(), lr=args.init_lr, weight_decay=args.weight_decay)
+        network_model.parameters(), lr=args.init_lr)
     scheduler = torch.optim.lr_scheduler.LambdaLR(optimizer, lr_func)
 
     transform_train = transforms.Compose([  # todo
         transforms.RandomCrop(256),
         transforms.ToTensor(),
-        Normalize(),
-        Mosaic(),
-        AddNoise()
     ])
 
     transform_test = transforms.Compose([  # todo
         transforms.CenterCrop(256),
         transforms.ToTensor(),
-        Normalize(),
-        Mosaic(),
-        AddNoise()
     ])
 
     train_set = CocoBlurDataset(root_dir=args.train_root, transform=transform_train)
@@ -208,19 +203,18 @@ def main(args):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument('--test_root', default='/mnt/lustre/share/niuyazhe/coco_burst_deblur_val')
-    parser.add_argument('--train_root', default='/mnt/lustre/share/niuyazhe/coco_burst_deblur_train_error')
+    parser.add_argument('--train_root', default='/mnt/lustre/share/niuyazhe/coco_burst_deblur_train')
     parser.add_argument('--log_model_dir', default='./train_log')
     parser.add_argument('--batch_size', default=4)
-    parser.add_argument('--num_workers', default=3)
+    parser.add_argument('--num_workers', default=2)
     parser.add_argument('--loss', default='l1_grad_loss')
     parser.add_argument('--norm_type', default=None)
     parser.add_argument('--init_lr', default=3e-4)
-    parser.add_argument('--weight_decay', default=1e-5)
     parser.add_argument('--epoch', default=1000)
     parser.add_argument('--evaluate', default=False)
-    parser.add_argument('--show_interval', default=100)
-    parser.add_argument('--test_interval', default=2)
-    parser.add_argument('--snapshot_interval', default=1)
+    parser.add_argument('--show_interval', default=20)
+    parser.add_argument('--test_interval', default=20)
+    parser.add_argument('--snapshot_interval', default=2)
     parser.add_argument('--exp_name', default='burst_deblur_baseline')
     args = parser.parse_args()
     if not os.path.exists(args.log_model_dir):
