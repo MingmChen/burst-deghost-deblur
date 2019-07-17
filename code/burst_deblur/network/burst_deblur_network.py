@@ -98,7 +98,7 @@ class DownsampleConv(nn.Module):
 
 
 class UpsampleConv(nn.Module):
-    def __init__(self, in_channels, out_channels, layers, upsample_type="bilinear", init_type="xavier", activation=nn.ReLU(), norm_type='BN'):
+    def __init__(self, in_channels, out_channels, layers, upsample_type="nearest", init_type="xavier", activation=nn.ReLU(), norm_type='BN'):
         super(UpsampleConv, self).__init__()
         convs = []
         for i in range(layers):
@@ -129,8 +129,8 @@ class UpsampleConv(nn.Module):
                         )
                     )
         self.main = nn.Sequential(*convs)
-        if upsample_type == "bilinear":
-            self.upsample = nn.Upsample(scale_factor=2, mode='bilinear', align_corners=False)
+        if upsample_type == "nearest":
+            self.upsample = lambda x: nn.functional.interpolate(x, scale_factor=2, mode='nearest')
         elif upsample_type == "conv_transpose_stride2":
             self.upsample = M.deconv2d_block(
                     in_channels=out_channels,
@@ -153,7 +153,7 @@ class UpsampleConv(nn.Module):
 
 class MidConv(nn.Module):
     def __init__(self, in_channels, out_channels, layers, downsample_type="maxpool",
-                 upsample_type="bilinear", init_type="xavier", activation=nn.ReLU(), norm_type='BN'):
+                 upsample_type="nearest", init_type="xavier", activation=nn.ReLU(), norm_type='BN'):
         super(MidConv, self).__init__()
         if downsample_type == "maxpool":
             self.downsample = nn.MaxPool2d(kernel_size=2)
@@ -200,8 +200,8 @@ class MidConv(nn.Module):
                     )
         self.main = nn.Sequential(*convs)
 
-        if upsample_type == "bilinear":
-            self.upsample = nn.Upsample(scale_factor=2, mode='bilinear', align_corners=False)
+        if upsample_type == "nearest":
+            self.upsample = lambda x: nn.functional.interpolate(x, scale_factor=2, mode='nearest')
         elif upsample_type == "conv_transpose_stride2":
             self.upsample = M.deconv2d_block(
                     in_channels=out_channels,
@@ -226,14 +226,14 @@ class MidConv(nn.Module):
 class BurstDeblurMP(nn.Module):
     #encoder_list = [32, 64, 128, 256]
     #decoder_list = [256, 128, 64, 32]
-    encoder_list = [16, 32, 64, 128]
-    decoder_list = [128, 64, 32, 16]
+    encoder_list = [16, 24, 48, 64]
+    decoder_list = [64, 48, 24, 16]
 
     def __init__(self, in_channels=1, layers=2, init_type="xavier", norm_type='WN'):
         super(BurstDeblurMP, self).__init__()
         self.init_type = init_type
         self.bn = norm_type
-        self.activation = nn.ELU(inplace=True)
+        self.activation = nn.ReLU(inplace=True)
         self.layers = layers
 
         self.input_conv = LayerConv(
@@ -298,7 +298,7 @@ class BurstDeblurMP(nn.Module):
                     norm_type=self.bn
                 )
         self.fusion4 = M.conv2d_block(
-                    in_channels=2*self.decoder_list[0] + self.encoder_list[2],
+                    in_channels=2*self.decoder_list[0],
                     out_channels=self.decoder_list[0],
                     kernel_size=1,
                     stride=1,
@@ -308,7 +308,7 @@ class BurstDeblurMP(nn.Module):
                     norm_type=self.bn
                 )
         self.upsample_conv1 = UpsampleConv(
-                    in_channels=self.decoder_list[0],
+                    in_channels=self.decoder_list[0] + self.encoder_list[2],
                     out_channels=self.decoder_list[1],
                     layers=self.layers,
                     init_type=self.init_type,
@@ -316,7 +316,7 @@ class BurstDeblurMP(nn.Module):
                     norm_type=self.bn
                 )
         self.fusion5 = M.conv2d_block(
-                    in_channels=2*self.decoder_list[1] + self.encoder_list[1],
+                    in_channels=2*self.decoder_list[1],
                     out_channels=self.decoder_list[1],
                     kernel_size=1,
                     stride=1,
@@ -326,7 +326,7 @@ class BurstDeblurMP(nn.Module):
                     norm_type=self.bn
                 )
         self.upsample_conv2 = UpsampleConv(
-                    in_channels=self.decoder_list[1],
+                    in_channels=self.decoder_list[1] + self.encoder_list[1],
                     out_channels=self.decoder_list[2],
                     layers=self.layers,
                     init_type=self.init_type,
@@ -334,7 +334,7 @@ class BurstDeblurMP(nn.Module):
                     norm_type=self.bn
                 )
         self.fusion6 = M.conv2d_block(
-                    in_channels=2*self.decoder_list[2] + self.encoder_list[0],
+                    in_channels=2*self.decoder_list[2],
                     out_channels=self.decoder_list[2],
                     kernel_size=1,
                     stride=1,
@@ -344,7 +344,7 @@ class BurstDeblurMP(nn.Module):
                     norm_type=self.bn
                 )
         self.output_conv1 = LayerConv(
-                    in_channels=self.decoder_list[2],
+                    in_channels=self.decoder_list[2] + self.encoder_list[0],
                     out_channels=self.decoder_list[3],
                     layers=self.layers,
                     init_type=self.init_type,
@@ -357,10 +357,47 @@ class BurstDeblurMP(nn.Module):
                     layers=1,
                     init_type=self.init_type,
                     activation=None,
-                    norm_type='BN'
+                    norm_type=None
                 )
 
+    def max_op(self, layer, x, num=6, skip_connect=None):
+        _, c, h, w = x.shape
+        x_max = x.view(-1, num, c, h, w).max(dim=1)[0]
+        x_r = []
+        for i in range(num):
+            if skip_connect is None:
+                x_t = torch.cat([x_max, x[i::num]], dim=1)
+            else:
+                x_t = torch.cat([x_max, x[i::num], skip_connect[i::num]], dim=1)
+            x_r.append(layer(x_t))
+        _, c, h, w = x_r[0].shape
+        return torch.stack(x_r, dim=1).view(-1, c, h, w)
+
+
     def forward(self, x):
+        b, n, c, h, w = x.shape
+        x = x.view(-1, c, h, w)
+
+        x1 = self.input_conv(x)
+        x1 = self.max_op(self.fusion1, x1)
+        x2 = self.downsample_conv1(x1)
+        x2 = self.max_op(self.fusion2, x2)
+        x3 = self.downsample_conv2(x2)
+        x3 = self.max_op(self.fusion3, x3)
+        x4 = self.mid(x3)
+        x4 = self.max_op(self.fusion4, x4)
+        x5 = self.upsample_conv1(torch.cat([x4, x3], dim=1))
+        x5 = self.max_op(self.fusion5, x5)
+        x6 = self.upsample_conv2(torch.cat([x5, x2], dim=1))
+        x6 = self.max_op(self.fusion6, x6)
+        x7 = self.output_conv1(torch.cat([x6, x1], dim=1))
+
+        _, c, h, w = x7.shape
+        x7 = x7.view(b, n, c, h, w).max(dim=1)[0]
+        x8 = self.output_conv2(x7)
+        return x8
+
+    def forward_old(self, x):
         b, n, c, h, w = x.shape
         x = x.view(-1, c, h, w)
         x1 = self.input_conv(x)
@@ -370,9 +407,9 @@ class BurstDeblurMP(nn.Module):
         x1_g = torch.max(x1_d, dim=1)[0]
         x1_g = x1_g.unsqueeze(1).repeat(1, n, 1, 1, 1).view(-1, c, h, w)
         x1_c = torch.cat([x1, x1_g], dim=1)
-        x1_f = self.fusion1(x1_c)
+        x1_c = self.fusion1(x1_c)
 
-        x2 = self.downsample_conv1(x1_f)
+        x2 = self.downsample_conv1(x1_c)
 
         _, c, h, w = x2.shape
         x2_d = x2.view(b, n, c, h, w)
@@ -421,21 +458,19 @@ class BurstDeblurMP(nn.Module):
 
         _, c, h, w = x7.shape
         x7_d = x7.view(b, n, c, h, w)
-        x7_g = torch.max(x7_d, dim=1)[0]
-        x8 = self.output_conv2(x7_g)
-
+        x = torch.max(x7_d, dim=1)[0]
+        x8 = self.output_conv2(x)
         return x8
 
 
 def unit_test_burst_deblur_mp():
-    net = BurstDeblurMP(in_channels=3, layers=2, norm_type='BN')
-    print(net)
-    inputs = torch.randn(4, 8, 3, 120, 80)
+    net = BurstDeblurMP(in_channels=3, layers=2, norm_type='WN')
+    inputs = torch.randn(8, 6, 3, 256, 256)
     if torch.cuda.is_available():
         net = net.cuda()
         inputs = inputs.cuda()
-    output = net(inputs)
-    print(output.shape)
+    output = net.forward_new(inputs)
+    print(torch.cuda.max_memory_allocated())
 
 
 if __name__ == "__main__":
