@@ -229,7 +229,7 @@ class BurstDeblurMP(nn.Module):
     encoder_list = [16, 32, 64, 128]
     decoder_list = [128, 64, 32, 16]
 
-    def __init__(self, in_channels=1, layers=2, init_type="xavier", norm_type='BN'):
+    def __init__(self, in_channels=1, layers=2, init_type="xavier", norm_type='WN'):
         super(BurstDeblurMP, self).__init__()
         self.init_type = init_type
         self.bn = norm_type

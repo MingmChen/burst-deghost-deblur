@@ -178,6 +178,8 @@ def conv2d_block(in_channels,
         block.append(LayerNorm(out_channels, affine=True))
     elif norm_type == 'AdaptiveIN':
         block.append(AdaptiveInstanceNorm2d(out_channels))
+    elif norm_type == 'WN':
+        block[-1] = nn.utils.weight_norm(block[-1])
     else:
         raise ValueError('invalid norm type:{}'.format(norm_type))
     if activation is not None:
