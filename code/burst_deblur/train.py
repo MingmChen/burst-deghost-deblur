@@ -24,6 +24,7 @@ import numpy as np
 from dataset import CocoBlurDataset
 from network.burst_deblur_network import BurstDeblurMP
 from network.loss import GradientLoss
+from network.scheduler import IterLambdaScheduler
 import math
 
 
@@ -88,8 +89,8 @@ def train(network_model, train_loader, test_loader, optimizer, scheduler, criter
 
     global_cnt = 0
     for epoch in range(args.epoch):
-        scheduler.step()  # update learning rate
         for idx, data in enumerate(train_loader):
+            scheduler.step()  # update learning rate
             global_cnt += 1
             img, gt = data
 
@@ -167,12 +168,12 @@ def main(args):
     else:
         raise ValueError
 
-    def lr_func(epoch):
-        return math.pow(0.999997, epoch)
+    def lr_func(iter):
+        return math.pow(0.999997, iter)
 
     optimizer = torch.optim.Adam(
         network_model.parameters(), lr=args.init_lr)
-    scheduler = torch.optim.lr_scheduler.LambdaLR(optimizer, lr_func)
+    scheduler = IterLambdaScheduler(optimizer, lr_func)
 
     transform_train = transforms.Compose([  # todo
         transforms.RandomCrop(256),
@@ -209,7 +210,7 @@ if __name__ == "__main__":
     parser.add_argument('--num_workers', default=2)
     parser.add_argument('--loss', default='l1_grad_loss')
     parser.add_argument('--norm_type', default=None)
-    parser.add_argument('--init_lr', default=3e-4)
+    parser.add_argument('--init_lr', default=3e-3)
     parser.add_argument('--epoch', default=1000)
     parser.add_argument('--evaluate', default=False)
     parser.add_argument('--show_interval', default=20)
